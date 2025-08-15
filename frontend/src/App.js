@@ -1,0 +1,36 @@
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Signup from './pages/Signup';
+import Login from './pages/Login';
+import Welcome from './pages/Welcome';
+import Dashboard from './components/Dashboard';
+import History from './components/History';
+import Events from './components/Events';
+import Budget from './components/Budget';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
+
+function App() {
+  return (
+    <Router>
+      <div className="d-flex flex-column min-vh-100">
+        <Navbar />
+
+        <main className="flex-grow-1">
+          <Routes>
+            <Route path="/" element={<Welcome />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/events" element={<Events />} />
+            <Route path="/budget" element={<Budget />} />
+          </Routes>
+        </main>
+
+        <Footer />
+      </div>
+    </Router>
+  );
+}
+
+export default App;
