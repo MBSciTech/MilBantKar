@@ -18,11 +18,14 @@ const expenseLogSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      required: true
+      required: true,
+      default : ''
     },
     date: {
       type: Date,
-      required: true
+      required: true,
+      default : new Date()
+
     }
   }
 );

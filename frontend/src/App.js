@@ -8,6 +8,7 @@ import Events from './components/Events';
 import Budget from './components/Budget';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import Transaction from './pages/Transaction';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
             <Route path="/history" element={<History />} />
             <Route path="/events" element={<Events />} />
             <Route path="/budget" element={<Budget />} />
+            <Route path="/transaction" element={<Transaction />} />
           </Routes>
         </main>
 

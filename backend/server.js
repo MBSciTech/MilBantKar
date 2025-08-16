@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const User = require('./models/User');
+const ExpenseLog = require('./models/expenceLog');
+const expenceLog = require('./models/expenceLog');
 require('dotenv').config();
 
 const app = express();
@@ -120,7 +122,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// Get user by ID
+// Get user by username
 app.get('/api/user/:username', async (req, res) => {
     try {
         const { username } = req.params;
@@ -129,16 +131,78 @@ app.get('/api/user/:username', async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-
+        // console.log(user)
         res.status(200).json(user);
 
     } catch (error) {
         console.error("❌ Fetch user error:", error);
         res.status(500).json({ message: "Server error" });
+    }   
+});
+
+// Fetch list of all users
+app.get('/api/users', async (req, res) => {
+    try {
+        let users = await User.find();
+        res.json(users);  
+    } catch (error) {
+        console.error('Failed to fetch all users', error);
+        res.status(500).json({ message: 'Server error' });
     }
 });
 
 
+//Expence rounts 
+// Add an expense log
+app.post('/api/expense/add', async (req, res) => {
+    try {
+        const { paidBy, paidTo, amount, description, date } = req.body;
+
+        // Basic validation
+        if (!paidBy || !paidTo || !amount) {
+            return res.status(400).json({ message: "Fill required fields" });
+        }
+
+        // Create a new expense log entry
+        const newExpense = new ExpenseLog({
+            paidBy,
+            paidTo,
+            amount,
+            description,
+            date
+        });
+
+        // Save to DB
+        const savedExpense = await newExpense.save();
+
+        res.status(201).json({
+            message: "Expense added successfully",
+            data: savedExpense
+        });
+
+    } catch (error) {
+        console.error("❌ Error adding expense:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+
+// Fetch all expenses with usernames populated
+app.get("/api/expense", async (req, res) => {
+    try {
+      const expenses = await expenceLog.find()
+        .populate("paidBy", "username")
+        .populate("paidTo", "username");
+
+      console.log(expenses)
+  
+      res.status(200).json(expenses);
+    } catch (error) {
+      console.error("❌ Error fetching expenses:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+  
 // Start server
 app.listen(PORT, () => {
     console.log(`✅ Server is running on http://localhost:${PORT}`);

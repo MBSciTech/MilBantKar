@@ -12,11 +12,30 @@ function Navbar() {
   });
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/user${localStorage.getItem('userId')}`)
-      .then((res) => res.json())
-      .then((data) => setUser(data))
-      .catch((err) => console.error('Error fetching user:', err));
+    const username = localStorage.getItem('username');
+    if (!username) return;
+  
+    fetch(`http://localhost:5000/api/user/${username}`)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        const userData = Array.isArray(data) ? data[0] : data;
+        console.log(userData)
+        if (userData) {
+          setUser({
+            avatar: userData.avatar || '',
+            username: userData.username || '',
+            email: userData.email || ''
+          });
+        }
+      })
+      .catch((err) => console.error('❌ Error fetching user:', err));
   }, []);
+  
 
   const Alerts = [
     { id: 1, message: "Budget limit exceeded for Shopping", time: "2 hours ago", type: "warning" },
@@ -71,20 +90,11 @@ function Navbar() {
 
             {/* Right side items */}
             <div className="d-flex align-items-center">
-              {/* Search Bar */}
-              <div className="me-3 d-none d-lg-block">
-                <div className="input-group" style={{ width: '250px' }}>
-                  <span className="input-group-text bg-light border-0">🔍</span>
-                  <input
-                    type="text"
-                    className="form-control bg-light border-0"
-                    placeholder="Search expenses..."
-                  />
-                </div>
-              </div>
 
               {/* Add Expense Button */}
-              <button className="btn btn-success btn-sm me-3 fw-medium">+ Add Expense</button>
+              <button onClick={()=>{
+                window.location.href = '/transaction'
+              }} className="btn btn-success btn-sm me-3 fw-medium">+ Add Expense</button>
 
               {/* Alerts Dropdown */}
               <div className="dropdown me-3">
@@ -153,7 +163,7 @@ function Navbar() {
                       <div className="d-flex align-items-center">
                         <img src={user.avatar} alt="Profile" className="rounded-circle me-2" width="32" height="32" />
                         <div>
-                          <div className="fw-medium">{user.name}</div>
+                          <div className="fw-medium">{user.username}</div>
                           <small className="text-muted">{user.email}</small>
                         </div>
                       </div>
