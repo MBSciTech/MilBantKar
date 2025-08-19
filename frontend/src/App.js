@@ -9,6 +9,7 @@ import Budget from './components/Budget';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Transaction from './pages/Transaction';
+import Profile from './components/Profile';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
             <Route path="/events" element={<Events />} />
             <Route path="/budget" element={<Budget />} />
             <Route path="/transaction" element={<Transaction />} />
+            <Route path="/profile" element={<Profile username={localStorage.getItem('username')} />} />
           </Routes>
         </main>
 

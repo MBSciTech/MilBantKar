@@ -26,6 +26,10 @@ const expenseLogSchema = new mongoose.Schema(
       required: true,
       default : new Date()
 
+    },
+    status: {
+      type: Boolean,
+      default : false
     }
   }
 );

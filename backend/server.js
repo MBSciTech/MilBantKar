@@ -151,6 +151,33 @@ app.get('/api/users', async (req, res) => {
     }
 });
 
+// Update user profile
+app.put('/api/user/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { username, email, phone, profilePic } = req.body;
+        // Only allow updating these fields
+        const updateFields = {};
+        if (username !== undefined) updateFields.username = username;
+        if (email !== undefined) updateFields.email = email;
+        if (phone !== undefined) updateFields.phone = phone;
+        if (profilePic !== undefined) updateFields.profilePic = profilePic;
+
+        const updatedUser = await User.findByIdAndUpdate(
+            id,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        );
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.status(200).json(updatedUser);
+    } catch (error) {
+        console.error('❌ Error updating user:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 
 //Expence rounts 
 // Add an expense log
@@ -169,7 +196,8 @@ app.post('/api/expense/add', async (req, res) => {
             paidTo,
             amount,
             description,
-            date
+            date,
+            status:false,
         });
 
         // Save to DB
@@ -194,7 +222,7 @@ app.get("/api/expense", async (req, res) => {
         .populate("paidBy", "username")
         .populate("paidTo", "username");
 
-      console.log(expenses)
+    //   console.log(expenses)
   
       res.status(200).json(expenses);
     } catch (error) {
@@ -202,8 +230,29 @@ app.get("/api/expense", async (req, res) => {
       res.status(500).json({ message: "Server error" });
     }
   });
+
+app.put('/api/expense/status/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const expense = await expenceLog.findById(id);
+        if (!expense) {
+            return res.status(404).json({ message: 'Expense not found' });
+        }
+
+        // Toggle
+        expense.status = !expense.status;
+        await expense.save();
+
+        res.json(expense);
+    } catch (error) {
+        console.error('Error ' + error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
   
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT,'0.0.0.0', () => {
     console.log(`✅ Server is running on http://localhost:${PORT}`);
 });

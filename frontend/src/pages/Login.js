@@ -16,7 +16,7 @@ function Login() {
     setIsLoading(true);
     
     try {
-      const res = await fetch('http://localhost:5000/api/auth/login', {
+      const res = await fetch('https://milbantkar-1.onrender.com/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -32,14 +32,14 @@ function Login() {
         localStorage.setItem('username', data.user.username);
         localStorage.setItem('userId', data.user.id);
 
-        // Optionally redirect after login
+        // Redirect to dashboard
         window.location.href = '/dashboard';
       } else {
         alert(data.error || 'Login failed!');
       }
     } catch (err) {
       console.error(err);
-      alert('Login failed!');
+      alert('Login failed! Server unreachable.');
     } finally {
       setIsLoading(false);
     }

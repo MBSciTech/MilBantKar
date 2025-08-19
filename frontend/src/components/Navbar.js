@@ -15,7 +15,7 @@ function Navbar() {
     const username = localStorage.getItem('username');
     if (!username) return;
   
-    fetch(`http://localhost:5000/api/user/${username}`)
+    fetch(`https://milbantkar-1.onrender.com/api/user/${username}`)
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
@@ -169,12 +169,11 @@ function Navbar() {
                       </div>
                     </div>
                     <div className="dropdown-divider"></div>
-                    <a className="dropdown-item" href="#profile">👤 My Profile</a>
+                    <a className="dropdown-item" href="/profile">👤 My Profile</a>
                     <a className="dropdown-item" href="#settings">⚙️ Settings</a>
-                    <a className="dropdown-item" href="#billing">💳 Billing</a>
                     <a className="dropdown-item" href="#help">❓ Help & Support</a>
                     <div className="dropdown-divider"></div>
-                    <a className="dropdown-item text-danger" href="#logout">🚪 Sign Out</a>
+                    <a className="dropdown-item text-danger" href="/">🚪 Sign Out</a>
                   </div>
                 )}
               </div>

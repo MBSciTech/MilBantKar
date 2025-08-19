@@ -44,7 +44,7 @@ function Transaction() {
 
   // Fetch users and load stored transactions
 useEffect(() => {
-    fetch('http://localhost:5000/api/users')
+    fetch('https://milbantkar-1.onrender.com/api/users')
     .then((res) => res.json())
     .then((data) => setUsers(data))
     .catch((e)=>{
@@ -86,7 +86,7 @@ useEffect(() => {
         return;
       }
 
-      const response = await fetch('http://localhost:5000/api/expense/add', {
+      const response = await fetch('https://milbantkar-1.onrender.com/api/expense/add', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,11 +135,12 @@ useEffect(() => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'INR'
     }).format(amount);
   };
+  
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
