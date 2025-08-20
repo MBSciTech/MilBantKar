@@ -4,6 +4,8 @@ const cors = require('cors');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
+const Event = require('./models/Event');
+
 require('dotenv').config();
 
 const app = express();
@@ -184,7 +186,6 @@ app.put('/api/user/:id', async (req, res) => {
 app.post('/api/expense/add', async (req, res) => {
     try {
         const { paidBy, paidTo, amount, description, date } = req.body;
-
         // Basic validation
         if (!paidBy || !paidTo || !amount) {
             return res.status(400).json({ message: "Fill required fields" });
@@ -248,6 +249,91 @@ app.put('/api/expense/status/:id', async (req, res) => {
     } catch (error) {
         console.error('Error ' + error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// -------------------- EVENT ROUTES -------------------- //
+
+// Create Event
+app.post('/api/events/create', async (req, res) => {
+    try {
+        const { name, description, createdBy } = req.body;
+
+        if (!name || !createdBy) {
+            return res.status(400).json({ message: "Name and createdBy are required" });
+        }
+
+        // generate random event code
+        const code = Math.random().toString(36).substr(2, 8).toUpperCase();
+
+        const newEvent = new Event({
+            name,
+            description,
+            createdBy,
+            code,
+            participants: [createdBy]
+        });
+
+        await newEvent.save();
+        res.status(201).json({ message: "Event created successfully", event: newEvent });
+
+    } catch (error) {
+        console.error("❌ Error creating event:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Join Event by code
+app.post('/api/events/join/:code', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        const { code } = req.params;
+
+        const event = await Event.findOne({ code });
+        if (!event) return res.status(404).json({ message: "Event not found" });
+
+        // Prevent duplicates
+        if (!event.participants.includes(userId)) {
+            event.participants.push(userId);
+            await event.save();
+        }
+
+        res.status(200).json({ message: "Joined event successfully", event });
+    } catch (error) {
+        console.error("❌ Error joining event:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Get event details with populated users & expenses
+app.get('/api/events/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const event = await Event.findById(id)
+            .populate("participants", "username email")
+            .populate({
+                path: "expenses",
+                populate: { path: "paidBy paidTo", select: "username" }
+            });
+
+        if (!event) return res.status(404).json({ message: "Event not found" });
+
+        res.status(200).json(event);
+    } catch (error) {
+        console.error("❌ Error fetching event:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Get all events for a user
+app.get('/api/events/user/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const events = await Event.find({ participants: userId });
+        res.status(200).json(events);
+    } catch (error) {
+        console.error("❌ Error fetching user events:", error);
+        res.status(500).json({ message: "Server error" });
     }
 });
 

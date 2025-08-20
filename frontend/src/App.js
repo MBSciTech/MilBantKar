@@ -24,7 +24,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/history" element={<History />} />
-            <Route path="/events" element={<Events />} />
+            <Route path="/events" element={<Events user={localStorage} />} />
             <Route path="/budget" element={<Budget />} />
             <Route path="/transaction" element={<Transaction />} />
             <Route path="/profile" element={<Profile username={localStorage.getItem('username')} />} />
