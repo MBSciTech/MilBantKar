@@ -9,7 +9,6 @@ import {
   HelpCircle, 
   LogOut, 
   Shield,
-  BarChart3,
   Calendar,
   Target,
   TrendingUp,
@@ -72,12 +71,18 @@ function Navbar() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isProfileOpen, isAlertsOpen]);
-
-  const alerts = [
-    { id: 1, message: "Budget limit exceeded for Shopping", time: "2 hours ago", type: "warning" },
-    { id: 2, message: "Monthly report is ready", time: "1 day ago", type: "info" },
-    { id: 3, message: "Payment reminder: Credit card bill", time: "3 days ago", type: "danger" }
-  ];
+  const alerts = [];
+  useEffect(()=>{
+    fetch(`https://milbantkar-1.onrender.com/api/alerts/`)
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      return res.json();
+    })
+    .then((data)=>{
+      console.log(data);
+    })
+    
+  })
 
   const navigationItems = [
     { path: "/dashboard", label: "Dashboard", icon: Home, active: true },

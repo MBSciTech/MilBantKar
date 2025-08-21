@@ -5,6 +5,7 @@ const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
+const Alert = require('./models/Alert');
 
 require('dotenv').config();
 
@@ -337,6 +338,93 @@ app.get('/api/events/user/:userId', async (req, res) => {
     }
 });
 
+//------------------------ alerts ---------------------------
+// Create a new alert (message or poll)
+app.post('/api/alerts/create', async (req, res) => {
+    try {
+        const { sender, receiver, message, type, expenseDetails, pollOptions } = req.body;
+
+        if (!sender || !message) {
+            return res.status(400).json({ message: "Sender and message are required" });
+        }
+
+        const newAlert = new Alert({
+            sender,
+            receiver,
+            message,
+            type,
+            expenseDetails,
+            pollOptions
+        });
+
+        await newAlert.save();
+
+        res.status(201).json({ message: "Alert created successfully", alert: newAlert });
+
+    } catch (error) {
+        console.error("❌ Error creating alert:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Get all alerts
+app.get('/api/alerts', async (req, res) => {
+    try {
+        const alerts = await Alert.find()
+            .populate("sender", "username")
+            .populate("receiver", "username")
+            .populate("expenseDetails");
+
+        res.status(200).json(alerts);
+    } catch (error) {
+        console.error("❌ Error fetching alerts:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Vote in a poll
+app.post('/api/alerts/vote/:alertId', async (req, res) => {
+    try {
+        const { alertId } = req.params;
+        const { userId, optionIndex } = req.body;
+
+        const alert = await Alert.findById(alertId);
+        if (!alert) return res.status(404).json({ message: "Alert not found" });
+        if (alert.type !== "poll") return res.status(400).json({ message: "Not a poll" });
+
+        // Remove user vote from all options first
+        alert.pollOptions.forEach(opt => {
+            opt.votes = opt.votes.filter(v => v.toString() !== userId);
+        });
+
+        // Add vote to selected option
+        if (alert.pollOptions[optionIndex]) {
+            alert.pollOptions[optionIndex].votes.push(userId);
+        } else {
+            return res.status(400).json({ message: "Invalid option index" });
+        }
+
+        await alert.save();
+        res.status(200).json({ message: "Vote recorded", alert });
+
+    } catch (error) {
+        console.error("❌ Error voting in poll:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Delete an alert
+app.delete('/api/alerts/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deleted = await Alert.findByIdAndDelete(id);
+        if (!deleted) return res.status(404).json({ message: "Alert not found" });
+        res.status(200).json({ message: "Alert deleted successfully" });
+    } catch (error) {
+        console.error("❌ Error deleting alert:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
   
 // Start server
 app.listen(PORT,'0.0.0.0', () => {

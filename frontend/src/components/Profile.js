@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Edit3, Camera, Save, X, Mail, Phone, Calendar, DollarSign, Shield } from 'lucide-react';
+import { User, Edit3, Camera, Save, X, Mail, Phone, Calendar, Shield } from 'lucide-react';
 
 const Profile = ({ username }) => {
   const [user, setUser] = useState(null);
@@ -336,7 +336,7 @@ const Profile = ({ username }) => {
     <>
       <style>{styles}</style>
       <div className="page-background">
-        <div className="container">
+        <div style={{'marginTop':'70px'}} className="container">
           {/* Header */}
           <div className="glass-card rounded p-4 p-md-5 mb-4">
             <div className="row align-items-center">

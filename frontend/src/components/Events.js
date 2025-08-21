@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from 'react';
+import axios from 'axios';
 import { 
   Plus, 
   Users, 
@@ -11,10 +11,7 @@ import {
   QrCode,
   Zap,
   Gift,
-  DollarSign,
-  Clock,
-  MapPin,
-  User
+  
 } from "lucide-react";
 
 const API_BASE = "https://milbantkar-1.onrender.com";
@@ -29,7 +26,7 @@ function Events({ user }) {
 
   // Fetch user's events
   useEffect(() => {
-    if (user.userId) {
+    if (user?.userId) {
       setLoading(true);
       fetch(`${API_BASE}/api/events/user/${user.userId}`)
         .then((res) => res.json())
@@ -45,10 +42,13 @@ function Events({ user }) {
 
   // Create new event
   const handleCreateEvent = async () => {
-    if (!newEvent.name.trim() || !user || !user._id) {
+    console.log(user)
+    if (!newEvent.name.trim() || !user || !user.userId) {
       showNotification("User not loaded. Please log in again.", "error");
       return;
     }
+
+
 
     setLoading(true);
     try {
@@ -59,7 +59,7 @@ function Events({ user }) {
         },
         body: JSON.stringify({
           ...newEvent,
-          createdBy: user._id,
+          createdBy: user.userId,
         }),
       });
       
@@ -91,7 +91,7 @@ function Events({ user }) {
     setLoading(true);
     try {
       const res = await axios.post(`${API_BASE}/api/events/join/${joinCode}`, {
-        userId: user._id,
+        userId: user.userId,
       });
       
       setEvents([res.data.event, ...events]);
@@ -626,12 +626,11 @@ function Events({ user }) {
                     <div className="col-12">
                       <input
                         type="text"
-                        placeholder="Enter 6-digit event code"
+                        placeholder="Enter code"
                         value={joinCode}
                         onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                         className="form-control form-glass text-center"
                         style={{ letterSpacing: '4px', fontWeight: '600', fontSize: '1.25rem' }}
-                        maxLength={6}
                       />
                     </div>
                     
@@ -687,7 +686,7 @@ function Events({ user }) {
                 ) : (
                   <div className="row g-3">
                     {events.map((event, index) => (
-                      <div key={event._id} className="col-12 col-md-6 col-xl-4">
+                      <div key={event.userId} className="col-12 col-md-6 col-xl-4">
                         <div className={`event-card ${animatingCards ? 'stagger-animation' : ''}`}>
                           <div className="d-flex align-items-start justify-content-between mb-3">
                             <div className="flex-grow-1">
@@ -703,7 +702,7 @@ function Events({ user }) {
                               {event.participants?.length || 0} members
                             </span>
                             <span>
-                              <DollarSign size={16} />
+                              ₹
                               Active
                             </span>
                           </div>

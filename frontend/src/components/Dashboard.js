@@ -7,6 +7,7 @@ function Dashboard() {
 
   useEffect(() => {
     const username = localStorage.getItem("username");
+    console.log(expenses)
 
     if (username) {
       fetch("https://milbantkar-1.onrender.com/api/expense")
