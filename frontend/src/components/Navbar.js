@@ -71,18 +71,21 @@ function Navbar() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isProfileOpen, isAlertsOpen]);
-  const alerts = [];
-  useEffect(()=>{
-    fetch(`https://milbantkar-1.onrender.com/api/alerts/`)
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      return res.json();
-    })
-    .then((data)=>{
-      console.log(data);
-    })
-    
-  })
+  
+  const [alerts, setAlerts] = useState([]);
+
+  useEffect(() => {
+    fetch("https://milbantkar-1.onrender.com/api/alerts")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        console.log("Fetched alerts:", data);
+        setAlerts(data);
+      })
+      .catch((err) => console.error("Fetch error:", err));
+  }, []); 
 
   const navigationItems = [
     { path: "/dashboard", label: "Dashboard", icon: Home, active: true },

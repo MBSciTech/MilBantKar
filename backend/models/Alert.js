@@ -5,7 +5,7 @@ const alertSchema = new mongoose.Schema({
     receiver: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     message: { type: String, required: true },
     type: { type: String, enum: ["warning", "info", "success", "poll"], required: true },
-    expenseDetails: { type: mongoose.Schema.Types.ObjectId, ref: "ExpenceLog" },
+    expenseDetails: { type: mongoose.Schema.Types.ObjectId, ref: "ExpenseLog" },
     seen :{type : Boolean},
     // Poll support
     pollOptions: [

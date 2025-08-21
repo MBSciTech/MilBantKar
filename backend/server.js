@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
-const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
 
