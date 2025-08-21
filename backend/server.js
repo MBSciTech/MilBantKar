@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
+const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
 
@@ -344,7 +345,7 @@ app.post('/api/alerts/create', async (req, res) => {
         const { sender, receiver, message, type, expenseDetails, pollOptions } = req.body;
 
         if (!sender || !message) {
-            return res.status(400).json({ message: "Sender and message are required" });
+            return res.status(400).json({ message: "Sender, message are required" });
         }
 
         const newAlert = new Alert({
