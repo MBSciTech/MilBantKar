@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, act } from 'react';
 import { 
   Menu, 
   X, 
@@ -19,7 +19,7 @@ import {
 
 function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [alertCount, setAlertCount] = useState(3);
+  const [alertCount, setAlertCount] = useState(0);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [user, setUser] = useState({
@@ -73,7 +73,6 @@ function Navbar() {
   }, [isProfileOpen, isAlertsOpen]);
   
   const [alerts, setAlerts] = useState([]);
-
   useEffect(() => {
     fetch("https://milbantkar-1.onrender.com/api/alerts")
       .then((res) => {
@@ -82,22 +81,27 @@ function Navbar() {
       })
       .then((data) => {
         console.log("Fetched alerts:", data);
-        setAlerts(data);
+        setAlerts(data.reverse());
+        var count = 0;
+        for(var i = 0;i<data.length;i++){
+          if(!data[seen]){
+            count++;
+          }
+        }
+
+        setAlertCount(count);
       })
       .catch((err) => console.error("Fetch error:", err));
   }, []); 
 
   const navigationItems = [
-    { path: "/dashboard", label: "Dashboard", icon: Home, active: true },
-    { path: "/history", label: "History", icon: FileText },
-    { path: "/events", label: "Events", icon: Calendar },
-    { path: "/budgets", label: "Budgets", icon: Target },
-    { path: "/analytics", label: "Analytics", icon: TrendingUp }
+    { path: "/dashboard", label: "Dashboard", icon: Home, active: false },
+    { path: "/history", label: "History", icon: FileText,active: false },
+    { path: "/events", label: "Events", icon: Calendar,active: false  },
+    { path: "/visualise", label: "Visualise", icon: TrendingUp,active:false}
   ];
 
   const handleLinkClick = (path) => {
-    // In a real app, you'd use React Router
-    console.log(`Navigating to: ${path}`);
     window.location.href = path;
     setIsMobileMenuOpen(false);
   };
@@ -628,7 +632,7 @@ function Navbar() {
                 <a 
                   href={item.path}
                   className={`nav-link ${item.active ? 'active' : ''}`}
-                  onClick={(e) => { e.preventDefault(); handleLinkClick(item.path); }}
+                  onClick={(e) => { e.preventDefault(); handleLinkClick(item.path);}}
                 >
                   <item.icon size={18} />
                   {item.label}
@@ -657,6 +661,7 @@ function Navbar() {
               >
                 <Bell size={20} />
                 {alertCount > 0 && (
+                  
                   <span className="notification-badge">{alertCount}</span>
                 )}
               </button>
