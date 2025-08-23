@@ -373,7 +373,13 @@ app.get('/api/alerts', async (req, res) => {
         const alerts = await Alert.find()
             .populate("sender", "username")
             .populate("receiver", "username")
-            .populate("expenseDetails");
+            .populate({
+                path: "expenseDetails",
+                populate: [
+                    { path: "paidBy", select: "username" },
+                    { path: "paidTo", select: "username" }
+                ]
+            });
 
         res.status(200).json(alerts);
     } catch (error) {
@@ -381,6 +387,7 @@ app.get('/api/alerts', async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 });
+
 
 // Vote in a poll
 app.post('/api/alerts/vote/:alertId', async (req, res) => {

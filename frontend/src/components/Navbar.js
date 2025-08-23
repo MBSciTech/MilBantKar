@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, act } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, 
   X, 
@@ -14,7 +14,16 @@ import {
   TrendingUp,
   FileText,
   Home,
-  Wallet
+  Wallet,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+  Vote,
+  Trash2,
+  Eye,
+  MessageSquare,
+  CreditCard
 } from 'lucide-react';
 
 function Navbar() {
@@ -22,6 +31,10 @@ function Navbar() {
   const [alertCount, setAlertCount] = useState(0);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  
   const [user, setUser] = useState({
     avatar: '', 
     username: 'Loading...',
@@ -33,8 +46,11 @@ function Navbar() {
   const profileRef = useRef(null);
   const alertsRef = useRef(null);
 
+  // Fetch current user data
   useEffect(() => {
-    const username = localStorage.getItem('username');
+    const username = typeof window !== 'undefined' && window.localStorage ? 
+      localStorage.getItem('username') : 'demo_user';
+    
     if (!username) return;
   
     fetch(`https://milbantkar-1.onrender.com/api/user/${username}`)
@@ -45,6 +61,7 @@ function Navbar() {
       .then((data) => {
         const userData = Array.isArray(data) ? data[0] : data;
         if (userData) {
+          setCurrentUser(userData);
           setUser({
             avatar: userData.profilePic || '',
             username: userData.username || '',
@@ -53,10 +70,10 @@ function Navbar() {
           });
         }
       })
-      .catch((err) => console.error('❌ Error fetching user:', err));
+      .catch((err) => console.error('Error fetching user:', err));
   }, []);
 
-  // Click outside logic for profile and alerts dropdowns
+  // Click outside logic for dropdowns
   useEffect(() => {
     function handleClickOutside(event) {
       if (isProfileOpen && profileRef.current && !profileRef.current.contains(event.target)) {
@@ -72,6 +89,7 @@ function Navbar() {
     };
   }, [isProfileOpen, isAlertsOpen]);
   
+  // Fetch alerts
   const [alerts, setAlerts] = useState([]);
   useEffect(() => {
     fetch("https://milbantkar-1.onrender.com/api/alerts")
@@ -80,47 +98,157 @@ function Navbar() {
         return res.json();
       })
       .then((data) => {
-        console.log("Fetched alerts:", data);
-        setAlerts(data.reverse());
-        var count = 0;
-        for(var i = 0;i<data.length;i++){
-          if(!data[seen]){
-            count++;
-          }
-        }
-
-        setAlertCount(count);
+        // Filter alerts for current user if we have user data
+        const userAlerts = currentUser ? 
+          data.filter(alert => 
+            !alert.receiver || 
+            alert.receiver._id === currentUser._id || 
+            alert.receiver.username === currentUser.username
+          ).reverse() : 
+          data.reverse();
+        
+        setAlerts(userAlerts);
+        
+        // Count unseen alerts
+        const unseenCount = userAlerts.filter(alert => !alert.seen).length;
+        setAlertCount(unseenCount);
       })
       .catch((err) => console.error("Fetch error:", err));
-  }, []); 
+  }, [currentUser]);
 
   const navigationItems = [
     { path: "/dashboard", label: "Dashboard", icon: Home, active: false },
-    { path: "/history", label: "History", icon: FileText,active: false },
-    { path: "/events", label: "Events", icon: Calendar,active: false  },
-    { path: "/visualise", label: "Visualise", icon: TrendingUp,active:false}
+    { path: "/history", label: "History", icon: FileText, active: false },
+    { path: "/events", label: "Events", icon: Calendar, active: false },
+    { path: "/visualise", label: "Visualise", icon: TrendingUp, active: false}
   ];
 
   const handleLinkClick = (path) => {
-    window.location.href = path;
+    if (typeof window !== 'undefined') {
+      window.location.href = path;
+    }
     setIsMobileMenuOpen(false);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('username');
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.removeItem('username');
+    }
     console.log('Logging out...');
   };
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
-    // Prevent body scroll when menu is open
-    document.body.style.overflow = !isMobileMenuOpen ? 'hidden' : 'unset';
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = !isMobileMenuOpen ? 'hidden' : 'unset';
+    }
+  };
+
+  // Handle notification click
+  const handleNotificationClick = (alert) => {
+    setSelectedAlert(alert);
+    setIsModalOpen(true);
+    setIsAlertsOpen(false);
+    
+    // Mark as seen (you can implement API call here)
+    markAlertAsSeen(alert._id);
+  };
+
+  const markAlertAsSeen = async (alertId) => {
+    try {
+      // You'll need to implement this API endpoint
+      await fetch(`https://milbantkar-1.onrender.com/api/alerts/seen/${alertId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      // Update local state
+      setAlerts(prev => prev.map(alert => 
+        alert._id === alertId ? { ...alert, seen: true } : alert
+      ));
+      
+      // Update count
+      setAlertCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking alert as seen:', error);
+    }
+  };
+
+  const deleteAlert = async (alertId) => {
+    try {
+      await fetch(`https://milbantkar-1.onrender.com/api/alerts/${alertId}`, {
+        method: 'DELETE'
+      });
+      
+      setAlerts(prev => prev.filter(alert => alert._id !== alertId));
+      setIsModalOpen(false);
+      setSelectedAlert(null);
+    } catch (error) {
+      console.error('Error deleting alert:', error);
+    }
+  };
+
+  const voteInPoll = async (alertId, optionIndex) => {
+    if (!currentUser) return;
+    
+    try {
+      const response = await fetch(`https://milbantkar-1.onrender.com/api/alerts/vote/${alertId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser._id,
+          optionIndex: optionIndex
+        })
+      });
+      
+      if (response.ok) {
+        const updatedAlert = await response.json();
+        setAlerts(prev => prev.map(alert => 
+          alert._id === alertId ? updatedAlert.alert : alert
+        ));
+        setSelectedAlert(updatedAlert.alert);
+      }
+    } catch (error) {
+      console.error('Error voting in poll:', error);
+    }
+  };
+
+  const getAlertIcon = (type) => {
+    switch (type) {
+      case 'warning': return <AlertTriangle size={20} className="text-warning" />;
+      case 'info': return <Info size={20} className="text-info" />;
+      case 'success': return <CheckCircle size={20} className="text-success" />;
+      case 'poll': return <Vote size={20} className="text-primary" />;
+      default: return <Bell size={20} className="text-secondary" />;
+    }
+  };
+
+  const getAlertTypeColor = (type) => {
+    switch (type) {
+      case 'warning': return '#ffc107';
+      case 'info': return '#0dcaf0';
+      case 'success': return '#198754';
+      case 'poll': return '#0d6efd';
+      default: return '#6c757d';
+    }
+  };
+
+  const formatTimeAgo = (date) => {
+    const now = new Date();
+    const alertDate = new Date(date);
+    const diffInHours = Math.floor((now - alertDate) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    return `${Math.floor(diffInHours / 24)}d ago`;
   };
 
   useEffect(() => {
     // Cleanup on unmount
     return () => {
-      document.body.style.overflow = 'unset';
+      if (typeof document !== 'undefined') {
+        document.body.style.overflow = 'unset';
+      }
     };
   }, []);
 
@@ -357,13 +485,16 @@ function Navbar() {
       border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 16px;
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-      min-width: 280px;
+      min-width: 320px;
+      max-width: 400px;
       padding: 1rem 0;
       transform: translateY(-10px);
       opacity: 0;
       visibility: hidden;
       transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       z-index: 1002;
+      max-height: 80vh;
+      overflow-y: auto;
     }
 
     .dropdown-menu.show {
@@ -398,6 +529,26 @@ function Navbar() {
     .dropdown-item.danger:hover {
       background: rgba(245, 101, 101, 0.1);
       color: #f56565;
+    }
+
+    .alert-item {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .alert-item:hover {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .alert-item:last-child {
+      border-bottom: none;
+    }
+
+    .alert-item.unread {
+      background: rgba(13, 110, 253, 0.05);
+      border-left: 4px solid #0d6efd;
     }
 
     .mobile-menu-toggle {
@@ -537,39 +688,6 @@ function Navbar() {
       pointer-events: auto;
     }
 
-    .alert-item {
-      padding: 1rem 1.5rem;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-      transition: all 0.2s ease;
-    }
-
-    .alert-item:hover {
-      background: rgba(0, 0, 0, 0.02);
-    }
-
-    .alert-item:last-child {
-      border-bottom: none;
-    }
-
-    .alert-icon {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .alert-icon.warning {
-      background: #f59e0b;
-    }
-
-    .alert-icon.danger {
-      background: #ef4444;
-    }
-
-    .alert-icon.info {
-      background: #3b82f6;
-    }
-
     @media (max-width: 1024px) {
       .nav-links {
         display: none;
@@ -603,10 +721,113 @@ function Navbar() {
       .mobile-menu {
         width: 100%;
       }
+
+      .dropdown-menu {
+        min-width: 280px;
+        max-width: 90vw;
+      }
     }
 
     body.menu-open {
       overflow: hidden;
+    }
+
+    /* Modal Styles */
+    .notification-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 1rem;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .notification-modal.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+      transform: translateY(20px);
+      transition: all 0.3s ease;
+    }
+
+    .notification-modal.show .modal-content {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: between;
+      gap: 1rem;
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+    }
+
+    .modal-footer {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .poll-option {
+      border: 2px solid #e9ecef;
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .poll-option:hover {
+      border-color: #0d6efd;
+      background: rgba(13, 110, 253, 0.05);
+    }
+
+    .poll-option.voted {
+      border-color: #198754;
+      background: rgba(25, 135, 84, 0.1);
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: #e9ecef;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #0d6efd;
+      border-radius: 2px;
+      transition: width 0.3s ease;
     }
   `;
 
@@ -661,18 +882,23 @@ function Navbar() {
               >
                 <Bell size={20} />
                 {alertCount > 0 && (
-                  
                   <span className="notification-badge">{alertCount}</span>
                 )}
               </button>
 
               <div className={`dropdown-menu ${isAlertsOpen ? 'show' : ''}`}>
                 <div className="dropdown-header">
-                  <div className="d-flex justify-content-between align-items-center">
-                    <h6 className="mb-0 fw-bold">Notifications</h6>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <h6 style={{ margin: 0, fontWeight: 'bold' }}>Notifications</h6>
                     <button 
-                      className="btn btn-sm btn-link text-primary p-0"
-                      style={{ fontSize: '0.85rem' }}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: '#0d6efd', 
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
                       onClick={() => setAlertCount(0)}
                     >
                       Mark all read
@@ -680,39 +906,96 @@ function Navbar() {
                   </div>
                 </div>
 
-                {alerts.map(alert => (
-                  <div key={alert.id} className="alert-item">
-                    <div className="d-flex align-items-start gap-3">
-                      <div className={`alert-icon ${alert.type} mt-1`}></div>
-                      <div className="flex-grow-1">
-                        <div className="fw-medium" style={{ fontSize: '0.9rem' }}>
-                          {alert.message}
+                {alerts.length === 0 ? (
+                  <div className="alert-item" style={{ textAlign: 'center', color: '#6c757d' }}>
+                    <Bell size={24} style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
+                    <div>No notifications yet</div>
+                  </div>
+                ) : (
+                  alerts.slice(0, 5).map(alert => (
+                    <div 
+                      key={alert._id} 
+                      className={`alert-item ${!alert.seen ? 'unread' : ''}`}
+                      onClick={() => handleNotificationClick(alert)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'start', gap: '0.75rem' }}>
+                        {getAlertIcon(alert.type)}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ 
+                            fontWeight: !alert.seen ? '600' : '500', 
+                            fontSize: '0.9rem',
+                            marginBottom: '0.25rem',
+                            lineHeight: '1.4'
+                          }}>
+                            {alert.message}
+                          </div>
+                          <div style={{ 
+                            fontSize: '0.8rem', 
+                            color: '#6c757d',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                          }}>
+                            <Clock size={12} />
+                            {formatTimeAgo(alert.createdAt)}
+                            {alert.sender && (
+                              <>
+                                <span>•</span>
+                                <span>from {alert.sender.username}</span>
+                              </>
+                            )}
+                          </div>
+                          {alert.type === 'poll' && (
+                            <div style={{ 
+                              fontSize: '0.75rem', 
+                              color: '#0d6efd',
+                              marginTop: '0.25rem',
+                              fontWeight: '500'
+                            }}>
+                              <Vote size={12} style={{ marginRight: '0.25rem' }} />
+                              Poll • Click to vote
+                            </div>
+                          )}
                         </div>
-                        <div className="text-muted" style={{ fontSize: '0.8rem' }}>
-                          {alert.time}
-                        </div>
+                        {!alert.seen && (
+                          <div style={{
+                            width: '8px',
+                            height: '8px',
+                            background: getAlertTypeColor(alert.type),
+                            borderRadius: '50%',
+                            flexShrink: 0,
+                            marginTop: '0.5rem'
+                          }}></div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
 
-                <div className="text-center pt-3">
-                  <a 
-                    href="/notifications" 
-                    className="text-decoration-none fw-medium"
-                    style={{ fontSize: '0.85rem' }}
-                    onClick={(e) => { e.preventDefault(); handleLinkClick('/notifications'); }}
-                  >
-                    View all notifications →
-                  </a>
-                </div>
+                {alerts.length > 5 && (
+                  <div style={{ textAlign: 'center', padding: '1rem' }}>
+                    <button 
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: '#0d6efd', 
+                        fontSize: '0.85rem',
+                        fontWeight: '500',
+                        cursor: 'pointer'
+                      }}
+                      onClick={(e) => { e.preventDefault(); handleLinkClick('/notifications'); }}
+                    >
+                      View all {alerts.length} notifications →
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Profile */}
             <div className="dropdown" ref={profileRef}>
               <button 
-                className="btn p-0 border-0"
+                style={{ background: 'none', border: 'none', padding: 0 }}
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
               >
                 {user.avatar ? (
@@ -730,17 +1013,25 @@ function Navbar() {
 
               <div className={`dropdown-menu ${isProfileOpen ? 'show' : ''}`}>
                 <div className="dropdown-header">
-                  <div className="d-flex align-items-center gap-3">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     {user.avatar ? (
-                      <img src={user.avatar} alt="Profile" className="rounded-circle" width="40" height="40" />
+                      <img src={user.avatar} alt="Profile" style={{ borderRadius: '50%', width: '40px', height: '40px' }} />
                     ) : (
-                      <div className="rounded-circle bg-primary d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
+                      <div style={{ 
+                        borderRadius: '50%', 
+                        background: '#0d6efd', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        width: '40px', 
+                        height: '40px' 
+                      }}>
                         <User size={20} color="white" />
                       </div>
                     )}
                     <div>
-                      <div className="fw-bold">{user.username}</div>
-                      <div className="text-muted small">{user.email}</div>
+                      <div style={{ fontWeight: 'bold' }}>{user.username}</div>
+                      <div style={{ color: '#6c757d', fontSize: '0.875rem' }}>{user.email}</div>
                     </div>
                   </div>
                 </div>
@@ -763,7 +1054,7 @@ function Navbar() {
                     Admin Panel
                   </a>
                 )}
-                <hr className="dropdown-divider" />
+                <div style={{ height: '1px', background: 'rgba(0,0,0,0.1)', margin: '0.5rem 0' }}></div>
                 <a href="/logout" className="dropdown-item danger" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
                   <LogOut size={18} />
                   Sign Out
@@ -782,17 +1073,25 @@ function Navbar() {
       {/* Mobile Menu */}
       <div className={`mobile-menu ${isMobileMenuOpen ? 'open' : ''}`}>
         <div className="mobile-menu-header">
-          <div className="d-flex align-items-center gap-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {user.avatar ? (
-              <img src={user.avatar} alt="Profile" className="rounded-circle" width="40" height="40" />
+              <img src={user.avatar} alt="Profile" style={{ borderRadius: '50%', width: '40px', height: '40px' }} />
             ) : (
-              <div className="rounded-circle bg-primary d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
+              <div style={{ 
+                borderRadius: '50%', 
+                background: '#0d6efd', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                width: '40px', 
+                height: '40px' 
+              }}>
                 <User size={20} color="white" />
               </div>
             )}
             <div>
-              <div className="fw-bold">{user.username}</div>
-              <div className="text-muted small">{user.email}</div>
+              <div style={{ fontWeight: 'bold' }}>{user.username}</div>
+              <div style={{ color: '#6c757d', fontSize: '0.875rem' }}>{user.email}</div>
             </div>
           </div>
           <button className="mobile-menu-close" onClick={toggleMobileMenu}>
@@ -842,7 +1141,7 @@ function Navbar() {
               Admin Panel
             </a>
           )}
-          <hr />
+          <div style={{ height: '1px', background: 'rgba(0,0,0,0.1)', margin: '0.5rem 0' }}></div>
           <a href="/logout" className="dropdown-item danger" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
             <LogOut size={18} />
             Sign Out
@@ -850,15 +1149,217 @@ function Navbar() {
         </div>
       </div>
 
+      {/* Notification Modal */}
+      {selectedAlert && (
+        <div className={`notification-modal ${isModalOpen ? 'show' : ''}`} onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setIsModalOpen(false);
+            setSelectedAlert(null);
+          }
+        }}>
+          <div className="modal-content">
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+                {getAlertIcon(selectedAlert.type)}
+                <div>
+                  <h5 style={{ margin: 0, fontWeight: '600' }}>
+                    {selectedAlert.type.charAt(0).toUpperCase() + selectedAlert.type.slice(1)} Notification
+                  </h5>
+                  <div style={{ fontSize: '0.875rem', color: '#6c757d', marginTop: '0.25rem' }}>
+                    {selectedAlert.sender ? `From: ${selectedAlert.sender.username}` : 'System notification'}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setSelectedAlert(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#6c757d',
+                  padding: '0.25rem'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h6 style={{ fontWeight: '600', marginBottom: '0.75rem' }}>Message</h6>
+                <p style={{ margin: 0, lineHeight: '1.6' }}>
+                  {selectedAlert.message}
+                </p>
+              </div>
+
+              {selectedAlert.expenseDetails && (
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <h6 style={{ fontWeight: '600', marginBottom: '0.75rem' }}>
+                        Related Expense
+                      </h6>
+
+                      <div
+                        style={{
+                          background: '#f8f9fa',
+                          padding: '1rem',
+                          borderRadius: '12px',
+                          border: '1px solid #e9ecef',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                          <CreditCard size={18} color="#6c63ff" />
+                          <span style={{ fontWeight: '600', fontSize: '0.95rem' }}>Expense Details</span>
+                        </div>
+
+                        <div style={{ display: 'grid', rowGap: '0.5rem', fontSize: '0.9rem' }}>
+                          <div>
+                            <strong>Paid By: </strong>
+                            {console.log(selectedAlert.expenseDetails)}
+                            {selectedAlert.expenseDetails?.paidBy?.username || "Unknown"}
+
+                          </div>
+                          <div>
+                            <strong>Paid To: </strong>
+                            {selectedAlert.expenseDetails?.paidTo?.username || "Unknown"}
+                          </div>
+                          <div>
+                            <strong>Amount: </strong>
+                            ₹{selectedAlert.expenseDetails?.amount}
+                          </div>
+                          <div>
+                            <strong>Description: </strong>
+                            {selectedAlert.expenseDetails?.description || "No description"}
+                          </div>
+                          <div>
+                            <strong>Date: </strong>
+                            {new Date(selectedAlert.expenseDetails?.date).toLocaleDateString()}
+                          </div>
+                          <div>
+                            <strong>Status: </strong>
+                            <span
+                              style={{
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                color: selectedAlert.expenseDetails?.status ? '#155724' : '#721c24',
+                                backgroundColor: selectedAlert.expenseDetails?.status ? '#d4edda' : '#f8d7da',
+                                border: `1px solid ${
+                                  selectedAlert.expenseDetails?.status ? '#c3e6cb' : '#f5c6cb'
+                                }`,
+                              }}
+                            >
+                              {selectedAlert.expenseDetails?.status ? 'Settled' : 'Pending'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+
+              {selectedAlert.type === 'poll' && selectedAlert.pollOptions && (
+                <div>
+                  <h6 style={{ fontWeight: '600', marginBottom: '0.75rem' }}>Poll Options</h6>
+                  {selectedAlert.pollOptions.map((option, index) => {
+                    const totalVotes = selectedAlert.pollOptions.reduce((sum, opt) => sum + opt.votes.length, 0);
+                    const votes = option.votes.length;
+                    const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+                    const hasVoted = currentUser && option.votes.some(vote => 
+                      (typeof vote === 'string' ? vote : vote._id || vote.toString()) === currentUser._id
+                    );
+                    
+                    return (
+                      <div
+                        key={index}
+                        className={`poll-option ${hasVoted ? 'voted' : ''}`}
+                        onClick={() => !hasVoted && voteInPoll(selectedAlert._id, index)}
+                        style={{ 
+                          opacity: hasVoted ? 1 : 0.8,
+                          position: 'relative'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: hasVoted ? '600' : '500' }}>
+                            {option.option}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {hasVoted && <CheckCircle size={16} className="text-success" />}
+                            <span style={{ fontSize: '0.875rem', color: '#6c757d' }}>
+                              {votes} vote{votes !== 1 ? 's' : ''} ({percentage.toFixed(0)}%)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="progress-bar">
+                          <div 
+                            className="progress-fill" 
+                            style={{ 
+                              width: `${percentage}%`,
+                              background: hasVoted ? '#198754' : '#0d6efd'
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ 
+                    fontSize: '0.875rem', 
+                    color: '#6c757d', 
+                    marginTop: '1rem',
+                    textAlign: 'center'
+                  }}>
+                    Total votes: {selectedAlert.pollOptions.reduce((sum, opt) => sum + opt.votes.length, 0)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <div style={{ fontSize: '0.875rem', color: '#6c757d' }}>
+                <Clock size={14} style={{ marginRight: '0.25rem' }} />
+                {new Date(selectedAlert.createdAt).toLocaleString()}
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setSelectedAlert(null);
+                  }}
+                  style={{
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Backdrop */}
-      {isMobileMenuOpen && (
+      {(isMobileMenuOpen || isModalOpen) && (
         <div 
-          className="menu-backdrop show"
+          className={`menu-backdrop ${(isMobileMenuOpen || isModalOpen) ? 'show' : ''}`}
           onClick={() => {
             setIsProfileOpen(false);
             setIsAlertsOpen(false);
             if (isMobileMenuOpen) {
               toggleMobileMenu();
+            }
+            if (isModalOpen) {
+              setIsModalOpen(false);
+              setSelectedAlert(null);
             }
           }}
         />
