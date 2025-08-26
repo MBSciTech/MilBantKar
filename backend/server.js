@@ -311,7 +311,7 @@ app.get('/api/events/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const event = await Event.findById(id)
-            .populate("participants", "username email")
+            .populate("participants", "username email profilePic")
             .populate({
                 path: "expenses",
                 populate: { path: "paidBy paidTo", select: "username" }

@@ -1219,7 +1219,7 @@ function Navbar() {
                         <div style={{ display: 'grid', rowGap: '0.5rem', fontSize: '0.9rem' }}>
                           <div>
                             <strong>Paid By: </strong>
-                            {console.log(selectedAlert.expenseDetails)}
+                            {/* {console.log(selectedAlert.expenseDetails)} */}
                             {selectedAlert.expenseDetails?.paidBy?.username || "Unknown"}
 
                           </div>

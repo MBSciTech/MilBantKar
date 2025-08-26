@@ -366,7 +366,6 @@ function History() {
           border-radius: 20px;
           background: rgba(255,255,255,0.9);
           backdrop-filter: blur(10px);
-          box-shadow: 0 8px 25px rgba(0,0,0,0.08);
         }
         
         .transaction-card:hover {
@@ -375,11 +374,13 @@ function History() {
         }
         
         .transaction-card.paid {
-          border-left: 5px solid var(--bs-danger);
+          border: 3px solid var(--bs-danger);
+          box-shadow: 0 0px 20px rgba(255, 0, 0, 0.59);
         }
         
         .transaction-card.received {
-          border-left: 5px solid var(--bs-success);
+          border: 3px solid var(--bs-success);
+          box-shadow: 0 0px 25px rgb(17, 255, 0);
         }
         
         .transaction-card.pending {

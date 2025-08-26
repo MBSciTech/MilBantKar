@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from 'axios';
 import { 
   Plus, 
@@ -23,7 +24,7 @@ function Events({ user }) {
   const [activeTab, setActiveTab] = useState("create");
   const [loading, setLoading] = useState(false);
   const [animatingCards, setAnimatingCards] = useState(false);
-
+  const navigate = useNavigate();
   // Fetch user's events
   useEffect(() => {
     if (user?.userId) {
@@ -693,7 +694,7 @@ function Events({ user }) {
                               <h5 className="text-white fw-bold mb-1">{event.name}</h5>
                               <p className="text-white-50 mb-0 small">{event.description || 'No description'}</p>
                             </div>
-                            <ArrowRight size={20} className="text-white-50 flex-shrink-0 ms-2" />
+                            <ArrowRight size={20} className="text-white-50 flex-shrink-0 ms-2" onClick={() => navigate(`/events/${event._id}`)} />
                           </div>
                           
                           <div className="event-meta mb-3">
