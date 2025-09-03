@@ -14,10 +14,11 @@ function EventPage() {
     const [expenseForm, setExpenseForm] = useState({
         amount: '',
         description: '',
-        paidTo: ''
+        paidTo: [], // Changed from string to array
+        splitType: 'equal' // Added split type
     });
     const [submitting, setSubmitting] = useState(false);
-    const [selectedParticipant, setSelectedParticipant] = useState(null);
+    const [selectedParticipants, setSelectedParticipants] = useState([]); // Changed from single participant to array
     
     // Settlement states
     const [showSettlement, setShowSettlement] = useState(false);
@@ -59,63 +60,133 @@ function EventPage() {
     };
 
     const handleParticipantSelect = (participant) => {
-        setSelectedParticipant(participant);
-        setExpenseForm({
-            ...expenseForm,
-            paidTo: participant._id
-        });
+        // Toggle participant selection
+        if (selectedParticipants.some(p => p._id === participant._id)) {
+            setSelectedParticipants(selectedParticipants.filter(p => p._id !== participant._id));
+        } else {
+            setSelectedParticipants([...selectedParticipants, participant]);
+        }
     };
 
     const handleAddExpense = async (e) => {
         e.preventDefault();
-        if (!expenseForm.amount || !expenseForm.paidTo) {
+        if (!expenseForm.amount || selectedParticipants.length === 0) {
             alert('Please fill in all required fields');
             return;
         }
-
+    
         setSubmitting(true);
         try {
-            const currentUserId = JSON.parse(localStorage.getItem('userId'));
+            // Safely get userId from localStorage
+            let currentUserId;
+            const userIdFromStorage = localStorage.getItem('userId');
+            if (!userIdFromStorage) {
+                console.error('No user ID found in localStorage');
+                alert('User session error. Please log in again.');
+                return;
+            }
             
-            const response = await fetch('https://milbantkar-1.onrender.com/api/expense/add', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    paidBy: currentUserId,
-                    paidTo: expenseForm.paidTo,
-                    amount: parseFloat(expenseForm.amount),
-                    description: expenseForm.description || 'No description',
-                    date: new Date()
+            // Try to parse only if it looks like JSON; otherwise use raw string
+            const trimmedUserId = userIdFromStorage.trim();
+            if (trimmedUserId.startsWith('"') || trimmedUserId.startsWith('{') || trimmedUserId.startsWith('[')) {
+                try {
+                    currentUserId = JSON.parse(trimmedUserId);
+                } catch (storageError) {
+                    console.warn('userId in localStorage is not valid JSON, using raw string.');
+                    currentUserId = userIdFromStorage;
+                }
+            } else {
+                currentUserId = userIdFromStorage;
+            }
+            console.log('Current user ID:', currentUserId);
+            
+            const amountPerPerson = parseFloat(expenseForm.amount) / selectedParticipants.length;
+            
+            // Create an array of promises for all expense requests
+            const expensePromises = selectedParticipants.map(participant => 
+                fetch('https://milbantkar-1.onrender.com/api/expense/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        paidBy: currentUserId,
+                        paidTo: participant._id,
+                        amount: amountPerPerson,
+                        description: expenseForm.description || 'No description',
+                        date: new Date(),
+                        eventId
+                    })
+                }).then(async response => {
+                    // Check if response is OK before trying to parse JSON
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    // Log response details for debugging
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+                    
+                    // Try to parse JSON, but handle cases where response might not be JSON
+                    try {
+                        const contentType = response.headers.get('content-type');
+                        console.log('Content-Type:', contentType);
+                        
+                        if (contentType && contentType.includes('application/json')) {
+                            const jsonData = await response.json();
+                            console.log('Parsed JSON response:', jsonData);
+                            return jsonData;
+                        } else {
+                            // If no JSON content type, just return success status
+                            console.log('Non-JSON response, returning success status');
+                            return { success: true, status: response.status };
+                        }
+                    } catch (parseError) {
+                        console.warn('Response parsing warning:', parseError);
+                        console.log('Raw response text:', await response.text());
+                        // Return a default success response if JSON parsing fails
+                        return { success: true, status: response.status };
+                    }
                 })
-            });
-
-            if (!response.ok) throw new Error('Failed to add expense');
-
+            );
+    
+            // Wait for all requests to complete
+            const responses = await Promise.all(expensePromises);
+            
+            // Check if any request failed
+            const failed = responses.some(response => response instanceof Error);
+            if (failed) throw new Error('Failed to add some expenses');
+    
             // Reset form and refresh event details
-            setExpenseForm({ amount: '', description: '', paidTo: '' });
-            setSelectedParticipant(null);
+            setExpenseForm({ amount: '', description: '', paidTo: [], splitType: 'equal' });
+            setSelectedParticipants([]);
             setShowAddExpense(false);
             await fetchEventDetails();
             
             // Success animation
             const successAlert = document.createElement('div');
             successAlert.className = 'success-toast';
-            successAlert.innerHTML = '<i class="fas fa-check-circle"></i> Expense added successfully!';
+            successAlert.innerHTML = '<i class="fas fa-check-circle"></i> Expenses added successfully!';
             document.body.appendChild(successAlert);
             setTimeout(() => {
                 successAlert.remove();
             }, 3000);
             
         } catch (err) {
-            alert('Failed to add expense');
-            console.error('Error adding expense:', err);
+            console.error('Error adding expenses:', err);
+            
+            // Provide more specific error messages
+            if (err.message.includes('JSON')) {
+                alert('Error processing server response. Please try again.');
+            } else if (err.message.includes('HTTP error')) {
+                alert(`Server error: ${err.message}`);
+            } else {
+                alert('Failed to add expenses. Please try again.');
+            }
         } finally {
             setSubmitting(false);
         }
     };
-
     // Debt Settlement Algorithm
     const calculateMinimumTransactions = () => {
         if (!event || !event.expenses || event.expenses.length === 0) {
@@ -295,7 +366,6 @@ function EventPage() {
                                 {event.participants?.map((participant, index) => (
                                     <div key={participant._id} className={`participant-item ${index === 0 ? 'admin' : ''}`}>
                                         <div className="participant-avatar">
-                                            {/* {console.log(participant)} */}
                                             <img
                                                 src={participant.profilePic || `https://ui-avatars.com/api/?name=${participant.username}&background=random&color=fff&size=50`}
                                                 alt={participant.username}
@@ -370,7 +440,7 @@ function EventPage() {
                                 <form onSubmit={handleAddExpense} className="expense-form">
                                     {/* Amount Input */}
                                     <div className="form-group-modern">
-                                        <label className="form-label-modern">Amount</label>
+                                        <label className="form-label-modern">Total Amount</label>
                                         <div className="amount-input-container">
                                             <div className="currency-symbol">₹</div>
                                             <input
@@ -391,12 +461,19 @@ function EventPage() {
 
                                     {/* Participant Selection */}
                                     <div className="form-group-modern">
-                                        <label className="form-label-modern">Paid To</label>
+                                        <label className="form-label-modern">
+                                            Split Between ({selectedParticipants.length} selected)
+                                            {expenseForm.amount && selectedParticipants.length > 0 && (
+                                                <span className="amount-per-person">
+                                                    ₹{(expenseForm.amount / selectedParticipants.length).toFixed(2)} per person
+                                                </span>
+                                            )}
+                                        </label>
                                         <div className="participant-selector">
                                             {event.participants?.map((participant) => (
                                                 <div
                                                     key={participant._id}
-                                                    className={`participant-option ${selectedParticipant?._id === participant._id ? 'selected' : ''}`}
+                                                    className={`participant-option ${selectedParticipants.some(p => p._id === participant._id) ? 'selected' : ''}`}
                                                     onClick={() => handleParticipantSelect(participant)}
                                                 >
                                                     <div className="option-avatar">
@@ -404,7 +481,7 @@ function EventPage() {
                                                             src={participant.profilePic || `https://ui-avatars.com/api/?name=${participant.username}&background=random&color=fff&size=60`}
                                                             alt={participant.username}
                                                         />
-                                                        {selectedParticipant?._id === participant._id && (
+                                                        {selectedParticipants.some(p => p._id === participant._id) && (
                                                             <div className="selected-indicator">
                                                                 <i className="fas fa-check"></i>
                                                             </div>
@@ -436,17 +513,17 @@ function EventPage() {
                                         <button
                                             type="submit"
                                             className="btn-submit"
-                                            disabled={submitting || !selectedParticipant}
+                                            disabled={submitting || selectedParticipants.length === 0}
                                         >
                                             {submitting ? (
                                                 <>
                                                     <div className="submit-spinner"></div>
-                                                    <span>Adding Expense...</span>
+                                                    <span>Adding Expenses...</span>
                                                 </>
                                             ) : (
                                                 <>
                                                     <i className="fas fa-save"></i>
-                                                    <span>Add Expense</span>
+                                                    <span>Add Expenses</span>
                                                 </>
                                             )}
                                         </button>

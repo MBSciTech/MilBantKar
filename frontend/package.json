@@ -17,6 +17,8 @@
     "react-router-dom": "^7.8.0",
     "react-scripts": "5.0.1",
     "recharts": "^3.1.2",
+    "vis-data": "^8.0.1",
+    "vis-network": "^10.0.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

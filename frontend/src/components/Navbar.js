@@ -252,6 +252,13 @@ function Navbar() {
     };
   }, []);
 
+  function getPath(){
+    var url = window.location.href.split('/');
+    var currentPath = url[url.length-1];
+    return currentPath;
+
+  }
+
   // Custom styles
   const styles = `
     .modern-navbar {
@@ -839,10 +846,11 @@ function Navbar() {
       <nav className="modern-navbar">
         <div className="navbar-content">
           {/* Brand Logo */}
-          <a href="/" className="navbar-brand" onClick={(e) => { e.preventDefault(); handleLinkClick('/'); }}>
+          <a href="/" className="navbar-brand" onClick={(e) => { e.preventDefault(); handleLinkClick('/'); }} style={{color:((getPath()=='login') || (getPath()=='signup') || (getPath()=='history'))?'black':'white'}}>
             <div className="brand-icon">
               <Wallet size={20} color="white" />
             </div>
+            {console.log(getPath())}
             Mil Bant Kar
           </a>
 
@@ -1142,7 +1150,7 @@ function Navbar() {
             </a>
           )}
           <div style={{ height: '1px', background: 'rgba(0,0,0,0.1)', margin: '0.5rem 0' }}></div>
-          <a href="/logout" className="dropdown-item danger" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
+          <a href="/" className="dropdown-item danger" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
             <LogOut size={18} />
             Sign Out
           </a>

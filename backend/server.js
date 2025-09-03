@@ -186,7 +186,7 @@ app.put('/api/user/:id', async (req, res) => {
 // Add an expense log
 app.post('/api/expense/add', async (req, res) => {
     try {
-        const { paidBy, paidTo, amount, description, date } = req.body;
+        const { paidBy, paidTo, amount, description, date, eventId } = req.body;
         // Basic validation
         if (!paidBy || !paidTo || !amount) {
             return res.status(400).json({ message: "Fill required fields" });
@@ -204,6 +204,20 @@ app.post('/api/expense/add', async (req, res) => {
 
         // Save to DB
         const savedExpense = await newExpense.save();
+
+        // If eventId provided, push this expense into the event's expenses array
+        if (eventId) {
+            try {
+                const event = await Event.findById(eventId);
+                if (event) {
+                    event.expenses.push(savedExpense._id);
+                    await event.save();
+                }
+            } catch (linkError) {
+                console.error("❌ Error linking expense to event:", linkError);
+                // Do not fail the whole request if linking fails; expense is already created
+            }
+        }
 
         res.status(201).json({
             message: "Expense added successfully",
