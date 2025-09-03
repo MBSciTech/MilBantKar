@@ -1120,6 +1120,34 @@
         transform: rotate(90deg);
     }
 
+    /* Settlement: mobile tweaks */
+    .settlements-list {
+        gap: 12px;
+    }
+
+    .settlement-item {
+        padding: 16px;
+    }
+
+    .from-user, .to-user {
+        justify-content: center;
+    }
+
+    .user-avatar img {
+        width: 36px;
+        height: 36px;
+    }
+
+    .amount-badge {
+        font-size: 14px;
+        padding: 6px 12px;
+    }
+
+    .info-badge {
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+
     .expense-item {
         flex-direction: column;
         gap: 20px;
@@ -1180,6 +1208,22 @@
 
     .settlement-content {
         padding: 20px;
+    }
+
+    /* Settlement: small phones */
+    .settlement-item {
+        padding: 14px;
+        border-radius: 16px;
+    }
+
+    .user-avatar img {
+        width: 32px;
+        height: 32px;
+    }
+
+    .amount-badge {
+        width: 100%;
+        text-align: center;
     }
 
     .card-header-modern {
