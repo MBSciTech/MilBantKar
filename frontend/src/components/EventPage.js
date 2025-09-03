@@ -75,7 +75,7 @@ function EventPage() {
 
         setSubmitting(true);
         try {
-            const currentUserId = JSON.parse(localStorage.getItem('userId') || '{}');
+            const currentUserId = JSON.parse(localStorage.getItem('userId'));
             
             const response = await fetch('https://milbantkar-1.onrender.com/api/expense/add', {
                 method: 'POST',
