@@ -12,6 +12,7 @@ import Transaction from './pages/Transaction';
 import Profile from './components/Profile';
 import EventPage from './components/EventPage';
 import Visualise from './pages/Visualise';
+import AdminPanel from './pages/AdminPanel';
 function App() {
   return (
     <Router>
@@ -31,6 +32,7 @@ function App() {
             <Route path="/profile" element={<Profile username={localStorage.getItem('username')} />} />
             <Route path='/events/:eventId' element={<EventPage />}/>
             <Route path='/visualise' element={<Visualise/>}/>
+            <Route path='/admin' element={<AdminPanel/>}/>
           </Routes>
         </main>
 

@@ -446,6 +446,262 @@ app.delete('/api/alerts/:id', async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 });
+
+// -------------------- ADMIN ROUTES -------------------- //
+
+// Admin middleware (basic check - in production, use proper JWT auth)
+const isAdmin = async (req, res, next) => {
+    try {
+        const { adminUsername } = req.headers;
+        if (!adminUsername) {
+            return res.status(401).json({ message: "Admin username required" });
+        }
+        
+        const user = await User.findOne({ username: adminUsername, isAdmin: true });
+        if (!user) {
+            return res.status(403).json({ message: "Admin access required" });
+        }
+        
+        req.adminUser = user;
+        next();
+    } catch (error) {
+        console.error("❌ Admin auth error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+// Admin: Get all events with populated data
+app.get('/api/admin/events', isAdmin, async (req, res) => {
+    try {
+        const events = await Event.find()
+            .populate("participants", "username email")
+            .populate("createdBy", "username")
+            .sort({ createdAt: -1 });
+        res.status(200).json(events);
+    } catch (error) {
+        console.error("❌ Error fetching admin events:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Get all expenses with populated data
+app.get('/api/admin/expenses', isAdmin, async (req, res) => {
+    try {
+        const expenses = await ExpenseLog.find()
+            .populate("paidBy", "username")
+            .populate("paidTo", "username")
+            .sort({ createdAt: -1 });
+        res.status(200).json(expenses);
+    } catch (error) {
+        console.error("❌ Error fetching admin expenses:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Create user
+app.post('/api/admin/users', isAdmin, async (req, res) => {
+    try {
+        const { username, email, phone, password, isAdmin: adminStatus, profilePic } = req.body;
+        
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required" });
+        }
+
+        const user = new User({
+            username,
+            email,
+            phone,
+            passwordHash: password,
+            isAdmin: adminStatus || false,
+            profilePic: profilePic || ''
+        });
+
+        await user.save();
+        res.status(201).json({ message: "User created successfully", user });
+    } catch (error) {
+        console.error("❌ Error creating user:", error);
+        
+        if (error.code === 11000) {
+            const field = Object.keys(error.keyPattern)[0];
+            return res.status(400).json({
+                message: `${field} already exists`
+            });
+        }
+        
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Update user
+app.put('/api/admin/users/:id', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { username, email, phone, password, isAdmin: adminStatus, profilePic } = req.body;
+        
+        const updateFields = {};
+        if (username !== undefined) updateFields.username = username;
+        if (email !== undefined) updateFields.email = email;
+        if (phone !== undefined) updateFields.phone = phone;
+        if (password !== undefined && password.trim()) updateFields.passwordHash = password;
+        if (adminStatus !== undefined) updateFields.isAdmin = adminStatus;
+        if (profilePic !== undefined) updateFields.profilePic = profilePic;
+
+        const updatedUser = await User.findByIdAndUpdate(
+            id,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        );
+        
+        if (!updatedUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        
+        res.status(200).json({ message: "User updated successfully", user: updatedUser });
+    } catch (error) {
+        console.error("❌ Error updating user:", error);
+        
+        if (error.code === 11000) {
+            const field = Object.keys(error.keyPattern)[0];
+            return res.status(400).json({
+                message: `${field} already exists`
+            });
+        }
+        
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Delete user
+app.delete('/api/admin/users/:id', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Check if user exists
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        
+        // Prevent deleting the current admin
+        if (user._id.toString() === req.adminUser._id.toString()) {
+            return res.status(400).json({ message: "Cannot delete your own account" });
+        }
+        
+        await User.findByIdAndDelete(id);
+        res.status(200).json({ message: "User deleted successfully" });
+    } catch (error) {
+        console.error("❌ Error deleting user:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Create event
+app.post('/api/admin/events', isAdmin, async (req, res) => {
+    try {
+        const { name, description, createdBy, isClosed } = req.body;
+        
+        if (!name || !createdBy) {
+            return res.status(400).json({ message: "Name and createdBy are required" });
+        }
+
+        // Generate random event code
+        const code = Math.random().toString(36).substr(2, 8).toUpperCase();
+
+        const newEvent = new Event({
+            name,
+            description,
+            createdBy,
+            code,
+            participants: [createdBy],
+            isClosed: isClosed || false
+        });
+
+        await newEvent.save();
+        res.status(201).json({ message: "Event created successfully", event: newEvent });
+    } catch (error) {
+        console.error("❌ Error creating event:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Update event
+app.put('/api/admin/events/:id', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, isClosed } = req.body;
+        
+        const updateFields = {};
+        if (name !== undefined) updateFields.name = name;
+        if (description !== undefined) updateFields.description = description;
+        if (isClosed !== undefined) updateFields.isClosed = isClosed;
+
+        const updatedEvent = await Event.findByIdAndUpdate(
+            id,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        );
+        
+        if (!updatedEvent) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+        
+        res.status(200).json({ message: "Event updated successfully", event: updatedEvent });
+    } catch (error) {
+        console.error("❌ Error updating event:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Delete event
+app.delete('/api/admin/events/:id', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const deletedEvent = await Event.findByIdAndDelete(id);
+        if (!deletedEvent) {
+            return res.status(404).json({ message: "Event not found" });
+        }
+        
+        res.status(200).json({ message: "Event deleted successfully" });
+    } catch (error) {
+        console.error("❌ Error deleting event:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Delete expense
+app.delete('/api/admin/expenses/:id', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const deletedExpense = await ExpenseLog.findByIdAndDelete(id);
+        if (!deletedExpense) {
+            return res.status(404).json({ message: "Expense not found" });
+        }
+        
+        res.status(200).json({ message: "Expense deleted successfully" });
+    } catch (error) {
+        console.error("❌ Error deleting expense:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Delete alert
+app.delete('/api/admin/alerts/:id', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const deletedAlert = await Alert.findByIdAndDelete(id);
+        if (!deletedAlert) {
+            return res.status(404).json({ message: "Alert not found" });
+        }
+        
+        res.status(200).json({ message: "Alert deleted successfully" });
+    } catch (error) {
+        console.error("❌ Error deleting alert:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
   
 // Start server
 app.listen(PORT,'0.0.0.0', () => {
