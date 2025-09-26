@@ -129,29 +129,76 @@ function History() {
       alert("User info not loaded. Please try again.");
       return;
     }
-    // exp.paidTo may be { username, _id } or just username
-    const receiverId = (exp.paidTo && exp.paidTo._id) ? exp.paidTo._id : exp.paidTo;
-    const expenseId = exp._id;
-    const message = `You have a pending payment for '${exp.description}' of amount ₹${exp.amount}.`;
+    
     try {
-      const res = await fetch("https://milbantkar-1.onrender.com/api/alerts/create", {
+      // First, get sender and receiver user details
+      const [senderRes, receiverRes] = await Promise.all([
+        fetch(`https://milbantkar-1.onrender.com/api/user/${exp.paidBy.username || exp.paidBy}`),
+        fetch(`https://milbantkar-1.onrender.com/api/user/${exp.paidTo.username || exp.paidTo}`)
+      ]);
+      
+      if (!senderRes.ok || !receiverRes.ok) {
+        alert("Failed to fetch user details. Please try again.");
+        return;
+      }
+      
+      const [senderData, receiverData] = await Promise.all([
+        senderRes.json(),
+        receiverRes.json()
+      ]);
+      
+      const sender = senderData[0]; // API returns array
+      const receiver = receiverData[0]; // API returns array
+      
+      if (!sender || !receiver) {
+        alert("User details not found. Please try again.");
+        return;
+      }
+      
+      // Send email reminder
+      const emailRes = await fetch("https://milbantkar-1.onrender.com/api/email/reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sender: {
+            username: sender.username,
+            email: sender.email
+          },
+          receiver: {
+            username: receiver.username,
+            email: receiver.email
+          },
+          amount: exp.amount,
+          expense: {
+            description: exp.description,
+            date: exp.date,
+            status: exp.status
+          }
+        })
+      });
+      
+      // Also create in-app alert
+      const alertRes = await fetch("https://milbantkar-1.onrender.com/api/alerts/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sender: userId,
-          receiver: receiverId,
-          message,
+          receiver: receiver._id,
+          message: `You have a pending payment for '${exp.description}' of amount ₹${exp.amount}.`,
           type: "info",
-          expenseDetails: expenseId
+          expenseDetails: exp._id
         })
       });
-      if (res.ok) {
-        alert(`Reminder sent to ${exp.paidTo.username || exp.paidTo}`);
+      
+      if (emailRes.ok && alertRes.ok) {
+        alert(`Reminder sent to ${receiver.username} (email + in-app alert)`);
       } else {
-        const data = await res.json();
-        alert("Failed to send reminder: " + (data.message || "Unknown error"));
+        const emailData = await emailRes.json().catch(() => ({}));
+        const alertData = await alertRes.json().catch(() => ({}));
+        alert(`Reminder partially sent. Email: ${emailRes.ok ? 'Success' : emailData.message || 'Failed'}, Alert: ${alertRes.ok ? 'Success' : alertData.message || 'Failed'}`);
       }
     } catch (err) {
+      console.error("Error sending reminder:", err);
       alert("Error sending reminder. Please check your connection.");
     }
   };

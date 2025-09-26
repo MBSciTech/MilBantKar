@@ -6,6 +6,7 @@ const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
+const nm = require("nodemailer");
 
 require('dotenv').config();
 
@@ -416,7 +417,95 @@ app.post('/api/alerts/create', async (req, res) => {
     }
 });
 
-// Removed /api/reminders/send (email sending feature disabled)
+app.post('/api/email/reminder', async(req,res) => {
+    try{
+        const {sender, receiver, amount, expense} = req.body;
+        
+        // Validate required fields
+        if (!sender || !receiver || !amount || !expense) {
+            return res.status(400).json({ message: "sender, receiver, amount, and expense are required" });
+        }
+        
+        if (!sender.username || !sender.email) {
+            return res.status(400).json({ message: "sender must have username and email" });
+        }
+        
+        if (!receiver.username || !receiver.email) {
+            return res.status(400).json({ message: "receiver must have username and email" });
+        }
+
+        let transporter = nm.createTransport({
+            host : "smtp.gmail.com",
+            port : 465,
+            secure:true,
+            auth:{
+                user:"maharshibhattstar@gmail.com",
+                pass:"pzxe mxpj gzts uyja"
+            }
+        });
+
+        let info = await transporter.sendMail({
+            from: sender.email,
+            to: receiver.email,
+            subject: `You owe ₹${amount} to ${sender.username}`,
+            html: `
+  <div style="font-family: Arial, sans-serif; background:#f9f9f9; padding:20px;">
+    <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+      
+      <!-- Header -->
+      <div style="background:#4CAF50; padding:15px; text-align:center; color:#fff;">
+        <h2 style="margin:0;">💸 Expense Reminder</h2>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:20px; color:#333;">
+        <p style="font-size:16px;">
+          Hi <b>${receiver.username}</b>,
+        </p>
+
+        <p style="font-size:16px;">
+          You owe <b>₹${amount}</b> to <b>${sender.username}</b>.
+        </p>
+
+        <table style="width:100%; margin-top:20px; border-collapse:collapse;">
+          <tr>
+            <td style="padding:10px; border:1px solid #ddd;"><b>Description</b></td>
+            <td style="padding:10px; border:1px solid #ddd;">${expense.description}</td>
+          </tr>
+          <tr>
+            <td style="padding:10px; border:1px solid #ddd;"><b>Date</b></td>
+            <td style="padding:10px; border:1px solid #ddd;">${new Date(expense.date).toLocaleDateString()}</td>
+          </tr>
+          <tr>
+            <td style="padding:10px; border:1px solid #ddd;"><b>Status</b></td>
+            <td style="padding:10px; border:1px solid #ddd; color:${expense.status ? 'green' : 'red'};">
+              ${expense.status ? "✅ Paid" : "❌ Pending"}
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin-top:20px; font-size:14px; color:#555;">
+          Please settle this amount as soon as possible.
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f1f1f1; padding:15px; text-align:center; font-size:12px; color:#777;">
+        <p style="margin:0;">This email was sent by <b>Mil Baat Kar</b> Expense Tracker.</p>
+      </div>
+    </div>
+  </div>
+`
+        });
+        
+        console.log("✅ Email sent successfully:", info.messageId);
+        res.status(200).json({ message: "Email sent successfully", messageId: info.messageId });
+        
+    }catch(error){
+        console.error("❌ Error sending email:", error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+})
 
 // Get all alerts
 app.get('/api/alerts', async (req, res) => {
