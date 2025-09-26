@@ -452,7 +452,8 @@ app.delete('/api/alerts/:id', async (req, res) => {
 // Admin middleware (basic check - in production, use proper JWT auth)
 const isAdmin = async (req, res, next) => {
     try {
-        const { adminUsername } = req.headers;
+        // Headers are case-insensitive; use Express getter to read safely
+        const adminUsername = req.get('adminUsername');
         if (!adminUsername) {
             return res.status(401).json({ message: "Admin username required" });
         }

@@ -45,7 +45,8 @@ function AdminPanel() {
             }
 
             const headers = {
-                'adminUsername': adminUsername
+                // Use lower-case header key to match Node's lower-cased req.headers
+                'adminusername': adminUsername
             };
 
             const [usersRes, eventsRes, expensesRes, alertsRes] = await Promise.all([
@@ -54,6 +55,12 @@ function AdminPanel() {
                 fetch('https://milbantkar-1.onrender.com/api/admin/expenses', { headers }),
                 fetch('https://milbantkar-1.onrender.com/api/alerts')
             ]);
+
+            // Check if responses are ok
+            if (!usersRes.ok) throw new Error('Failed to fetch users');
+            if (!eventsRes.ok) throw new Error('Failed to fetch events');
+            if (!expensesRes.ok) throw new Error('Failed to fetch expenses');
+            if (!alertsRes.ok) throw new Error('Failed to fetch alerts');
 
             const [usersData, eventsData, expensesData, alertsData] = await Promise.all([
                 usersRes.json(),
@@ -67,7 +74,7 @@ function AdminPanel() {
             setExpenses(expensesData);
             setAlerts(alertsData);
         } catch (err) {
-            setError('Failed to fetch data');
+            setError('Failed to fetch data: ' + err.message);
             console.error('Error fetching data:', err);
         } finally {
             setLoading(false);
@@ -96,7 +103,10 @@ function AdminPanel() {
                 body: JSON.stringify(userForm)
             });
 
-            if (!response.ok) throw new Error('Failed to save user');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to save user');
+            }
             
             setSuccess(editingItem ? 'User updated successfully' : 'User created successfully');
             setShowUserForm(false);
@@ -104,7 +114,7 @@ function AdminPanel() {
             setUserForm({ username: '', email: '', phone: '', password: '', isAdmin: false, profilePic: '' });
             fetchAllData();
         } catch (err) {
-            setError('Failed to save user');
+            setError(err.message || 'Failed to save user');
         } finally {
             setLoading(false);
         }
@@ -120,6 +130,17 @@ function AdminPanel() {
                 'adminUsername': adminUsername
             };
 
+            // Validate createdBy field - should be a valid user ID
+            if (!eventForm.createdBy) {
+                throw new Error('Created By field is required');
+            }
+
+            // Check if createdBy is a valid user ID
+            const userExists = users.find(user => user._id === eventForm.createdBy);
+            if (!userExists) {
+                throw new Error('Invalid user ID for Created By field');
+            }
+
             const url = editingItem 
                 ? `https://milbantkar-1.onrender.com/api/admin/events/${editingItem._id}`
                 : 'https://milbantkar-1.onrender.com/api/admin/events';
@@ -132,7 +153,10 @@ function AdminPanel() {
                 body: JSON.stringify(eventForm)
             });
 
-            if (!response.ok) throw new Error('Failed to save event');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to save event');
+            }
             
             setSuccess(editingItem ? 'Event updated successfully' : 'Event created successfully');
             setShowEventForm(false);
@@ -140,7 +164,7 @@ function AdminPanel() {
             setEventForm({ name: '', description: '', createdBy: '', isClosed: false });
             fetchAllData();
         } catch (err) {
-            setError('Failed to save event');
+            setError(err.message || 'Failed to save event');
         } finally {
             setLoading(false);
         }
@@ -161,12 +185,15 @@ function AdminPanel() {
                 headers
             });
 
-            if (!response.ok) throw new Error(`Failed to delete ${type}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `Failed to delete ${type}`);
+            }
             
             setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully`);
             fetchAllData();
         } catch (err) {
-            setError(`Failed to delete ${type}`);
+            setError(err.message || `Failed to delete ${type}`);
         } finally {
             setLoading(false);
         }
@@ -188,7 +215,7 @@ function AdminPanel() {
             setEventForm({
                 name: item.name || '',
                 description: item.description || '',
-                createdBy: item.createdBy || '',
+                createdBy: item.createdBy?._id || item.createdBy || '',
                 isClosed: item.isClosed || false
             });
             setShowEventForm(true);
@@ -360,6 +387,7 @@ function AdminPanel() {
                                         <th>Name</th>
                                         <th>Description</th>
                                         <th>Code</th>
+                                        <th>Created By</th>
                                         <th>Participants</th>
                                         <th>Status</th>
                                         <th>Created</th>
@@ -372,6 +400,7 @@ function AdminPanel() {
                                             <td>{event.name}</td>
                                             <td>{event.description || 'N/A'}</td>
                                             <td><code>{event.code}</code></td>
+                                            <td>{event.createdBy?.username || 'N/A'}</td>
                                             <td>{event.participants?.length || 0}</td>
                                             <td>
                                                 <span className={`badge ${event.isClosed ? 'closed' : 'active'}`}>
@@ -551,6 +580,7 @@ function AdminPanel() {
                                     value={userForm.password}
                                     onChange={(e) => setUserForm({...userForm, password: e.target.value})}
                                     required={!editingItem}
+                                    placeholder={editingItem ? "Leave blank to keep current password" : ""}
                                 />
                             </div>
                             <div className="form-group">
@@ -617,12 +647,18 @@ function AdminPanel() {
                             </div>
                             <div className="form-group">
                                 <label>Created By (User ID)</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={eventForm.createdBy}
                                     onChange={(e) => setEventForm({...eventForm, createdBy: e.target.value})}
                                     required
-                                />
+                                >
+                                    <option value="">Select a user</option>
+                                    {users.map(user => (
+                                        <option key={user._id} value={user._id}>
+                                            {user.username} ({user.email})
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="form-group checkbox-group">
                                 <label>

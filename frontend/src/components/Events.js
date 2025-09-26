@@ -703,9 +703,9 @@ function Events({ user }) {
                               {event.participants?.length || 0} members
                             </span>
                             <span>
-                              ₹
-                              Active
-                            </span>
+                            ₹ {event.isClose ? "Active" : "Close"}
+                          </span>
+
                           </div>
                           
                           <div 
