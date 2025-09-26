@@ -340,6 +340,40 @@ app.get('/api/events/:id', async (req, res) => {
     }
 });
 
+// Conclude/close event (only creator can conclude)
+app.put('/api/events/:id/conclude', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ message: 'userId is required' });
+        }
+
+        const event = await Event.findById(id);
+        if (!event) return res.status(404).json({ message: 'Event not found' });
+
+        if (event.createdBy.toString() !== userId) {
+            return res.status(403).json({ message: 'Only the creator can conclude this event' });
+        }
+
+        event.isClosed = true;
+        await event.save();
+
+        const populated = await Event.findById(id)
+            .populate('participants', 'username email profilePic')
+            .populate({
+                path: 'expenses',
+                populate: { path: 'paidBy paidTo', select: 'username' }
+            });
+
+        res.status(200).json({ message: 'Event concluded successfully', event: populated });
+    } catch (error) {
+        console.error('❌ Error concluding event:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Get all events for a user
 app.get('/api/events/user/:userId', async (req, res) => {
     try {

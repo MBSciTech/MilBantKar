@@ -25,6 +25,54 @@ function EventPage() {
     const [settlements, setSettlements] = useState([]);
     const [processingSettlement, setProcessingSettlement] = useState(false);
 
+    // Helper to get current user id from localStorage safely
+    const getCurrentUserId = () => {
+        try {
+            const raw = localStorage.getItem('userId');
+            if (!raw) return null;
+            const t = raw.trim();
+            if (t.startsWith('"') || t.startsWith('{') || t.startsWith('[')) {
+                try { return JSON.parse(t); } catch { return raw; }
+            }
+            return raw;
+        } catch {
+            return null;
+        }
+    };
+
+    const handleConcludeEvent = async () => {
+        if (!event || event.isClosed) return;
+        const userId = getCurrentUserId();
+        if (!userId) {
+            alert('User session error. Please log in again.');
+            return;
+        }
+        const isCreator = String(event.createdBy?._id || event.createdBy) === String(userId);
+        if (!isCreator) {
+            alert('Only the event creator can conclude this event.');
+            return;
+        }
+        if (!window.confirm('Are you sure you want to conclude this event? This will mark it as closed.')) {
+            return;
+        }
+        try {
+            const res = await fetch(`https://milbantkar-1.onrender.com/api/events/${eventId}/conclude`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId })
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.message || `Failed with status ${res.status}`);
+            }
+            await fetchEventDetails();
+            alert('Event concluded successfully.');
+        } catch (err) {
+            console.error('Conclude event failed:', err);
+            alert(`Failed to conclude event: ${err.message || 'Unknown error'}`);
+        }
+    };
+
     useEffect(() => {
         fetchEventDetails();
         fetchUsers();
@@ -418,6 +466,29 @@ function EventPage() {
                                         <small>Calculate debts</small>
                                     </div>
                                 </button>
+
+                                {/* Conclude Event - only creator and when active */}
+                                {(() => {
+                                    const uid = getCurrentUserId();
+                                    const isCreator = uid && String(event.createdBy?._id || event.createdBy) === String(uid);
+                                    if (!event.isClosed && isCreator) {
+                                        return (
+                                            <button
+                                                className="btn-action btn-danger"
+                                                onClick={handleConcludeEvent}
+                                            >
+                                                <div className="btn-icon">
+                                                    <i className="fas fa-flag-checkered"></i>
+                                                </div>
+                                                <div className="btn-text">
+                                                    <span>Conclude Event</span>
+                                                    <small>Mark as closed</small>
+                                                </div>
+                                            </button>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                             </div>
                         </div>
                     </div>

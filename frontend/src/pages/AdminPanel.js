@@ -10,6 +10,7 @@ function AdminPanel() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [showPasswords, setShowPasswords] = useState({});
 
     // Form states
     const [showUserForm, setShowUserForm] = useState(false);
@@ -317,6 +318,7 @@ function AdminPanel() {
                                         <th>Username</th>
                                         <th>Email</th>
                                         <th>Phone</th>
+                                        <th>Password</th>
                                         <th>Admin</th>
                                         <th>Created</th>
                                         <th>Actions</th>
@@ -335,6 +337,19 @@ function AdminPanel() {
                                             <td>{user.username || 'N/A'}</td>
                                             <td>{user.email}</td>
                                             <td>{user.phone || 'N/A'}</td>
+                                            <td>
+                                                <span style={{ fontFamily: 'monospace' }}>
+                                                    {showPasswords[user._id] ? (user.passwordHash || 'N/A') : '********'}
+                                                </span>
+                                                <button 
+                                                    className="btn-icon"
+                                                    style={{ marginLeft: '8px' }}
+                                                    title={showPasswords[user._id] ? 'Hide password' : 'Show password'}
+                                                    onClick={() => setShowPasswords(prev => ({ ...prev, [user._id]: !prev[user._id] }))}
+                                                >
+                                                    <i className={`fas ${showPasswords[user._id] ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                                </button>
+                                            </td>
                                             <td>
                                                 <span className={`badge ${user.isAdmin ? 'admin' : 'user'}`}>
                                                     {user.isAdmin ? 'Admin' : 'User'}
