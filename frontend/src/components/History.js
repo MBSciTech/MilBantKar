@@ -130,7 +130,7 @@ function History() {
       return;
     }
     // exp.paidTo may be { username, _id } or just username
-    const receiverId = exp.paidTo._id || exp.paidTo;
+    const receiverId = (exp.paidTo && exp.paidTo._id) ? exp.paidTo._id : exp.paidTo;
     const expenseId = exp._id;
     const message = `You have a pending payment for '${exp.description}' of amount ₹${exp.amount}.`;
     try {
@@ -146,11 +146,11 @@ function History() {
           eventId: exp.eventId || undefined
         })
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         alert(`Reminder sent to ${exp.paidTo.username || exp.paidTo} (email + in-app)`);
       } else {
-        const data = await res.json();
-        alert("Failed to send reminder: " + (data.message || "Unknown error"));
+        alert("Failed to send reminder: " + (data.message || data.error || "Unknown error"));
       }
     } catch (err) {
       alert("Error sending reminder. Please check your connection.");

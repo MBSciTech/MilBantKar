@@ -255,8 +255,8 @@ app.post('/api/expense/add', async (req, res) => {
 app.get("/api/expense", async (req, res) => {
     try {
       const expenses = await expenceLog.find()
-        .populate("paidBy", "username")
-        .populate("paidTo", "username");
+        .populate("paidBy", "username _id")
+        .populate("paidTo", "username _id");
 
     //   console.log(expenses)
   
