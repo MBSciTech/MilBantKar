@@ -488,7 +488,7 @@ app.post('/api/reminders/send', async (req, res) => {
         ].filter(Boolean);
 
         const mailOptions = {
-            from: `MilBantKar <${REMINDER_EMAIL}>`,
+            from: `maharshibhattstar@gmail.com`,
             to: receiverUser.email,
             subject,
             text: lines.join('\n'),
