@@ -439,6 +439,7 @@ app.post('/api/alerts/create', async (req, res) => {
 app.post('/api/reminders/send', async (req, res) => {
     try {
         const { sender, receiver, amount, message, eventId } = req.body;
+        console.log('📩 /api/reminders/send body:', { sender, receiver, amount, message, eventId });
 
         if (!sender || !receiver || amount === undefined || amount === null) {
             return res.status(400).json({ message: 'sender, receiver, and amount are required' });
@@ -454,11 +455,14 @@ app.post('/api/reminders/send', async (req, res) => {
             eventId ? Event.findById(eventId) : Promise.resolve(null)
         ]);
 
-        if (!senderUser || !receiverUser) {
-            return res.status(404).json({ message: 'Sender or receiver not found' });
+        if (!senderUser) {
+            return res.status(404).json({ message: 'Sender not found', field: 'sender' });
+        }
+        if (!receiverUser) {
+            return res.status(404).json({ message: 'Receiver not found', field: 'receiver' });
         }
         if (!receiverUser.email) {
-            return res.status(400).json({ message: 'Receiver email not found' });
+            return res.status(400).json({ message: 'Receiver email not found', field: 'receiver.email' });
         }
 
         // Create in-app alert
@@ -488,7 +492,7 @@ app.post('/api/reminders/send', async (req, res) => {
         ].filter(Boolean);
 
         const mailOptions = {
-            from: `maharshibhattstar@gmail.com`,
+            from: `MilBantKar <${REMINDER_EMAIL}>`,
             to: receiverUser.email,
             subject,
             text: lines.join('\n'),
@@ -502,7 +506,8 @@ app.post('/api/reminders/send', async (req, res) => {
             return res.status(200).json({
                 message: 'Alert created. Email failed to send.',
                 alert: alertDoc,
-                emailError: mailErr?.message || 'Unknown email error'
+                emailError: mailErr?.message || 'Unknown email error',
+                details: { to: receiverUser.email, from: REMINDER_EMAIL }
             });
         }
 
