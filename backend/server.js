@@ -440,8 +440,12 @@ app.post('/api/reminders/send', async (req, res) => {
     try {
         const { sender, receiver, amount, message, eventId } = req.body;
 
-        if (!sender || !receiver || !amount) {
+        if (!sender || !receiver || amount === undefined || amount === null) {
             return res.status(400).json({ message: 'sender, receiver, and amount are required' });
+        }
+        const numericAmount = Number(amount);
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+            return res.status(400).json({ message: 'amount must be a positive number' });
         }
 
         const [senderUser, receiverUser, event] = await Promise.all([
@@ -453,12 +457,15 @@ app.post('/api/reminders/send', async (req, res) => {
         if (!senderUser || !receiverUser) {
             return res.status(404).json({ message: 'Sender or receiver not found' });
         }
+        if (!receiverUser.email) {
+            return res.status(400).json({ message: 'Receiver email not found' });
+        }
 
         // Create in-app alert
         const alertDoc = new Alert({
             sender,
             receiver,
-            message: message || `You owe ₹${amount} to ${senderUser.username}`,
+            message: message || `You owe ₹${numericAmount} to ${senderUser.username}`,
             type: 'reminder',
             expenseDetails: undefined,
             pollOptions: undefined
@@ -471,7 +478,7 @@ app.post('/api/reminders/send', async (req, res) => {
             `Hi ${receiverUser.username},`,
             '',
             `${senderUser.username} is reminding you about a pending amount.`,
-            `Amount: ₹${Number(amount).toFixed(2)}`,
+            `Amount: ₹${numericAmount.toFixed(2)}`,
             event ? `Event: ${event.name} (${event.code})` : undefined,
             message ? `Note: ${message}` : undefined,
             '',
@@ -505,7 +512,7 @@ app.post('/api/reminders/send', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error sending reminder:', error);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Server error', error: error?.message || 'Unknown error' });
     }
 });
 
