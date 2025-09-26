@@ -441,8 +441,8 @@ app.post('/api/email/reminder', async(req,res) => {
                 port: 587,
                 secure: false,
                 auth: {
-                    user: "maharshibhattstar@gmail.com",
-                    pass: "pzxe mxpj gzts uyja"
+                    user: "maharshibhattisro@gmail.com",
+                    pass: "ydff hjsv prgm ysum"
                 },
                 tls: {
                     rejectUnauthorized: false
@@ -456,8 +456,8 @@ app.post('/api/email/reminder', async(req,res) => {
                 port: 465,
                 secure: true,
                 auth: {
-                    user: "maharshibhattstar@gmail.com",
-                    pass: "pzxe mxpj gzts uyja"
+                    user: "maharshibhattisro@gmail.com",
+                    pass: "ydff hjsv prgm ysum"
                 },
                 tls: {
                     rejectUnauthorized: false
@@ -481,7 +481,7 @@ app.post('/api/email/reminder', async(req,res) => {
                 console.log(`✅ SMTP connection verified with config ${i + 1}`);
                 
                 info = await transporter.sendMail({
-                    from: "maharshibhattstar@gmail.com", // Use fixed sender
+                    from: "maharshibhattisro@gmail.com", // Use fixed sender
                     to: receiver.email,
                     subject: `You owe ₹${amount} to ${sender.username}`,
                     html: `
