@@ -123,7 +123,7 @@ function History() {
     setUpdatingStatus(null);
   };
 
-  // Send reminder alert to receiver
+  // Send reminder alert + email to receiver
   const sendReminder = async (exp) => {
     if (!userId) {
       alert("User info not loaded. Please try again.");
@@ -134,19 +134,20 @@ function History() {
     const expenseId = exp._id;
     const message = `You have a pending payment for '${exp.description}' of amount ₹${exp.amount}.`;
     try {
-      const res = await fetch("https://milbantkar-1.onrender.com/api/alerts/create", {
+      const res = await fetch("https://milbantkar-1.onrender.com/api/reminders/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sender: userId,
           receiver: receiverId,
+          amount: exp.amount,
           message,
-          type: "info",
-          expenseDetails: expenseId
+          // eventId is optional; pass if present on expense
+          eventId: exp.eventId || undefined
         })
       });
       if (res.ok) {
-        alert(`Reminder sent to ${exp.paidTo.username || exp.paidTo}`);
+        alert(`Reminder sent to ${exp.paidTo.username || exp.paidTo} (email + in-app)`);
       } else {
         const data = await res.json();
         alert("Failed to send reminder: " + (data.message || "Unknown error"));

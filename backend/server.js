@@ -6,6 +6,7 @@ const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
+const nodemailer = require('nodemailer');
 
 require('dotenv').config();
 
@@ -32,6 +33,25 @@ mongoose.connect(MONGO_URI, {
 // Default route
 app.get("/", (req, res) => {
     res.send("🚀 Mil Bant Kar API is running...");
+});
+
+// -------------------- MAILER SETUP -------------------- //
+const REMINDER_EMAIL = process.env.REMINDER_EMAIL || 'maharshibhattstar@gmail.com';
+const REMINDER_PASS = process.env.REMINDER_PASS || 'pzxe mxpj gzts uyja';
+
+const mailTransporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: REMINDER_EMAIL,
+        pass: REMINDER_PASS,
+    },
+});
+
+// Health check for transporter (optional, not awaited on startup)
+mailTransporter.verify().then(() => {
+    console.log('✅ Mail transporter ready');
+}).catch((err) => {
+    console.warn('⚠️ Mail transporter not verified yet:', err?.message || err);
 });
 
 // Signup route
@@ -412,6 +432,80 @@ app.post('/api/alerts/create', async (req, res) => {
     } catch (error) {
         console.error("❌ Error creating alert:", error);
         res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Send reminder: creates alert + sends email to receiver
+app.post('/api/reminders/send', async (req, res) => {
+    try {
+        const { sender, receiver, amount, message, eventId } = req.body;
+
+        if (!sender || !receiver || !amount) {
+            return res.status(400).json({ message: 'sender, receiver, and amount are required' });
+        }
+
+        const [senderUser, receiverUser, event] = await Promise.all([
+            User.findById(sender),
+            User.findById(receiver),
+            eventId ? Event.findById(eventId) : Promise.resolve(null)
+        ]);
+
+        if (!senderUser || !receiverUser) {
+            return res.status(404).json({ message: 'Sender or receiver not found' });
+        }
+
+        // Create in-app alert
+        const alertDoc = new Alert({
+            sender,
+            receiver,
+            message: message || `You owe ₹${amount} to ${senderUser.username}`,
+            type: 'reminder',
+            expenseDetails: undefined,
+            pollOptions: undefined
+        });
+        await alertDoc.save();
+
+        // Prepare email
+        const subject = `Payment Reminder from ${senderUser.username}`;
+        const lines = [
+            `Hi ${receiverUser.username},`,
+            '',
+            `${senderUser.username} is reminding you about a pending amount.`,
+            `Amount: ₹${Number(amount).toFixed(2)}`,
+            event ? `Event: ${event.name} (${event.code})` : undefined,
+            message ? `Note: ${message}` : undefined,
+            '',
+            'Please settle at your earliest convenience.',
+            '',
+            '— MilBantKar'
+        ].filter(Boolean);
+
+        const mailOptions = {
+            from: `MilBantKar <${REMINDER_EMAIL}>`,
+            to: receiverUser.email,
+            subject,
+            text: lines.join('\n'),
+        };
+
+        try {
+            await mailTransporter.sendMail(mailOptions);
+        } catch (mailErr) {
+            console.error('❌ Mail send error:', mailErr);
+            // Still return success for in-app alert creation with a mail warning
+            return res.status(200).json({
+                message: 'Alert created. Email failed to send.',
+                alert: alertDoc,
+                emailError: mailErr?.message || 'Unknown email error'
+            });
+        }
+
+        res.status(201).json({
+            message: 'Reminder sent successfully',
+            alert: alertDoc
+        });
+    } catch (error) {
+        console.error('❌ Error sending reminder:', error);
+        res.status(500).json({ message: 'Server error' });
     }
 });
 
