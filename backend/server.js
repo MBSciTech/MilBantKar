@@ -434,21 +434,57 @@ app.post('/api/email/reminder', async(req,res) => {
             return res.status(400).json({ message: "receiver must have username and email" });
         }
 
-        let transporter = nm.createTransport({
-            host : "smtp.gmail.com",
-            port : 465,
-            secure:true,
-            auth:{
-                user:"maharshibhattstar@gmail.com",
-                pass:"pzxe mxpj gzts uyja"
+        // Try multiple SMTP configurations for better reliability
+        const smtpConfigs = [
+            {
+                host: "smtp.gmail.com",
+                port: 587,
+                secure: false,
+                auth: {
+                    user: "maharshibhattstar@gmail.com",
+                    pass: "pzxe mxpj gzts uyja"
+                },
+                tls: {
+                    rejectUnauthorized: false
+                },
+                connectionTimeout: 30000,
+                greetingTimeout: 15000,
+                socketTimeout: 30000
+            },
+            {
+                host: "smtp.gmail.com",
+                port: 465,
+                secure: true,
+                auth: {
+                    user: "maharshibhattstar@gmail.com",
+                    pass: "pzxe mxpj gzts uyja"
+                },
+                tls: {
+                    rejectUnauthorized: false
+                },
+                connectionTimeout: 30000,
+                greetingTimeout: 15000,
+                socketTimeout: 30000
             }
-        });
+        ];
 
-        let info = await transporter.sendMail({
-            from: sender.email,
-            to: receiver.email,
-            subject: `You owe ₹${amount} to ${sender.username}`,
-            html: `
+        let lastError = null;
+        let info = null;
+
+        for (let i = 0; i < smtpConfigs.length; i++) {
+            try {
+                console.log(`🔄 Trying SMTP config ${i + 1}/${smtpConfigs.length}...`);
+                const transporter = nm.createTransport(smtpConfigs[i]);
+                
+                // Test connection first
+                await transporter.verify();
+                console.log(`✅ SMTP connection verified with config ${i + 1}`);
+                
+                info = await transporter.sendMail({
+                    from: "maharshibhattstar@gmail.com", // Use fixed sender
+                    to: receiver.email,
+                    subject: `You owe ₹${amount} to ${sender.username}`,
+                    html: `
   <div style="font-family: Arial, sans-serif; background:#f9f9f9; padding:20px;">
     <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
       
@@ -496,9 +532,22 @@ app.post('/api/email/reminder', async(req,res) => {
     </div>
   </div>
 `
-        });
+                });
+                
+                console.log("✅ Email sent successfully:", info.messageId);
+                break; // Success, exit the loop
+                
+            } catch (error) {
+                console.log(`❌ SMTP config ${i + 1} failed:`, error.message);
+                lastError = error;
+                continue; // Try next config
+            }
+        }
+
+        if (!info) {
+            throw lastError || new Error("All SMTP configurations failed");
+        }
         
-        console.log("✅ Email sent successfully:", info.messageId);
         res.status(200).json({ message: "Email sent successfully", messageId: info.messageId });
         
     }catch(error){
