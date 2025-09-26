@@ -470,7 +470,7 @@ app.post('/api/reminders/send', async (req, res) => {
             sender,
             receiver,
             message: message || `You owe ₹${numericAmount} to ${senderUser.username}`,
-            type: 'reminder',
+            type: 'info',
             expenseDetails: undefined,
             pollOptions: undefined
         });
