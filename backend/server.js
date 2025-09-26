@@ -36,8 +36,8 @@ app.get("/", (req, res) => {
 });
 
 // -------------------- MAILER SETUP -------------------- //
-const REMINDER_EMAIL = process.env.REMINDER_EMAIL || 'maharshibhattstar@gmail.com';
-const REMINDER_PASS = process.env.REMINDER_PASS || 'pzxe mxpj gzts uyja';
+const REMINDER_EMAIL =  'maharshibhattstar@gmail.com';
+const REMINDER_PASS = 'pzxe mxpj gzts uyja';
 
 const mailTransporter = nodemailer.createTransport({
     service: 'gmail',
