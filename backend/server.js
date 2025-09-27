@@ -511,15 +511,46 @@ app.post('/api/email/reminder', async (req, res) => {
   `
       };
   
-      // ✅ Send email
+      // ✅ Send email with fallback
       console.log('📧 Attempting to send email with SendGrid...');
       console.log('📧 Email message:', JSON.stringify(msg, null, 2));
       
-      const result = await sgMail.send(msg);
-      console.log('📧 SendGrid response:', result);
+      let emailSent = false;
+      let emailError = null;
+      
+      try {
+        const result = await sgMail.send(msg);
+        console.log('📧 SendGrid response:', result);
+        emailSent = true;
+        console.log("✅ Email sent successfully via SendGrid");
+      } catch (sgError) {
+        console.error("❌ SendGrid failed:", sgError.message);
+        emailError = sgError.message;
+        
+        // Fallback: Create a detailed alert instead of email
+        console.log("📧 Creating detailed alert as email fallback...");
+        
+        const detailedAlert = new Alert({
+          sender: req.body.sender?.username ? await User.findOne({ username: req.body.sender.username }) : null,
+          receiver: req.body.receiver?.username ? await User.findOne({ username: req.body.receiver.username }) : null,
+          message: `📧 EMAIL REMINDER: ${sender.username} wants to remind ${receiver.username} about a pending payment of ₹${amount} for "${expense.description}". Email sending failed, but this alert serves as the reminder.`,
+          type: "info",
+          expenseDetails: expense._id || null
+        });
+        
+        await detailedAlert.save();
+        console.log("✅ Detailed alert created as email fallback");
+      }
   
-      console.log("✅ Email sent successfully");
-      res.status(200).json({ message: "Email sent successfully", messageId: result[0]?.headers?.['x-message-id'] });
+      if (emailSent) {
+        res.status(200).json({ message: "Email sent successfully via SendGrid" });
+      } else {
+        res.status(200).json({ 
+          message: "Email failed, but detailed alert created instead", 
+          emailError: emailError,
+          fallback: "Detailed in-app alert created"
+        });
+      }
   
     } catch (error) {
       console.error("❌ Error sending email:", error);
