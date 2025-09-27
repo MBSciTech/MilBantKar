@@ -419,10 +419,31 @@ app.post('/api/alerts/create', async (req, res) => {
 });
 
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY); 
+// Set SendGrid API key
+if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    console.log("✅ SendGrid API key configured");
+} else {
+    console.warn("⚠️ SENDGRID_API_KEY not found in environment variables");
+} 
 app.post('/api/email/reminder', async (req, res) => {
     try {
+      console.log('📧 Email reminder request received:', {
+        body: req.body,
+        headers: req.headers
+      });
+
+      // Check if SendGrid is configured
+      if (!process.env.SENDGRID_API_KEY) {
+        console.log('❌ SendGrid API key not found in environment');
+        return res.status(503).json({ 
+          message: "Email service not configured. Please set SENDGRID_API_KEY environment variable.",
+          error: "SendGrid API key missing"
+        });
+      }
+
       const { sender, receiver, amount, expense } = req.body;
+      console.log('📧 Parsed data:', { sender, receiver, amount, expense });
   
       // ✅ Validation
       if (!sender || !receiver || !amount || !expense) {
@@ -491,14 +512,27 @@ app.post('/api/email/reminder', async (req, res) => {
       };
   
       // ✅ Send email
-      await sgMail.send(msg);
+      console.log('📧 Attempting to send email with SendGrid...');
+      console.log('📧 Email message:', JSON.stringify(msg, null, 2));
+      
+      const result = await sgMail.send(msg);
+      console.log('📧 SendGrid response:', result);
   
       console.log("✅ Email sent successfully");
-      res.status(200).json({ message: "Email sent successfully" });
+      res.status(200).json({ message: "Email sent successfully", messageId: result[0]?.headers?.['x-message-id'] });
   
     } catch (error) {
       console.error("❌ Error sending email:", error);
-      res.status(500).json({ message: "Server error", error: error.message });
+      console.error("❌ Error details:", {
+        message: error.message,
+        code: error.code,
+        response: error.response?.body
+      });
+      res.status(500).json({ 
+        message: "Server error", 
+        error: error.message,
+        details: error.response?.body || error.code
+      });
     }
   });
 

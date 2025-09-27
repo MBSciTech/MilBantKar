@@ -156,7 +156,32 @@ function History() {
       }
       
       // Send email reminder
+      const emailPayload = {
+        sender: {
+          username: sender.username,
+          email: sender.email
+        },
+        receiver: {
+          username: receiver.username,
+          email: receiver.email
+        },
+        amount: exp.amount,
+        expense: {
+          description: exp.description,
+          date: exp.date,
+          status: exp.status
+        }
+      };
       
+      console.log('📧 Sending email reminder with payload:', emailPayload);
+      
+      const emailRes = await fetch("https://milbantkar-1.onrender.com/api/email/reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(emailPayload)
+      });
+      
+      console.log('📧 Email response status:', emailRes.status);
       
       // Also create in-app alert
       const alertRes = await fetch("https://milbantkar-1.onrender.com/api/alerts/create", {
@@ -176,6 +201,10 @@ function History() {
       } else {
         const emailData = await emailRes.json().catch(() => ({}));
         const alertData = await alertRes.json().catch(() => ({}));
+        
+        console.error('📧 Email error response:', emailData);
+        console.error('📧 Alert error response:', alertData);
+        
         alert(`Reminder partially sent. Email: ${emailRes.ok ? 'Success' : emailData.message || 'Failed'}, Alert: ${alertRes.ok ? 'Success' : alertData.message || 'Failed'}`);
       }
     } catch (err) {
