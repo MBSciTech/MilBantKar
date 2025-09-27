@@ -459,7 +459,7 @@ app.post('/api/email/reminder', async (req, res) => {
       // ✅ Email template
       const msg = {
         to: receiver.email,
-        from: "maharshibhattstar@gmail.com", // must be a verified sender in SendGrid
+        from: "maharshibhatt904@gmail.com", // must be a verified sender in SendGrid
         subject: `You owe ₹${amount} to ${sender.username}`,
         html: `
     <div style="font-family: Arial, sans-serif; background:#f9f9f9; padding:20px;">
