@@ -7,6 +7,7 @@ const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
 const nm = require("nodemailer");
+const sgMail = require("@sendgrid/mail");
 
 require('dotenv').config();
 
@@ -417,144 +418,89 @@ app.post('/api/alerts/create', async (req, res) => {
     }
 });
 
-app.post('/api/email/reminder', async(req,res) => {
-    try{
-        const {sender, receiver, amount, expense} = req.body;
+
+sgMail.setApiKey(process.env.SENDGRID_API_KEY); 
+app.post('/api/email/reminder', async (req, res) => {
+    try {
+      const { sender, receiver, amount, expense } = req.body;
+  
+      // ✅ Validation
+      if (!sender || !receiver || !amount || !expense) {
+        return res.status(400).json({ message: "sender, receiver, amount, and expense are required" });
+      }
+      if (!sender.username || !sender.email) {
+        return res.status(400).json({ message: "sender must have username and email" });
+      }
+      if (!receiver.username || !receiver.email) {
+        return res.status(400).json({ message: "receiver must have username and email" });
+      }
+  
+      // ✅ Email template
+      const msg = {
+        to: receiver.email,
+        from: "maharshibhattstar@gmail.com", // must be a verified sender in SendGrid
+        subject: `You owe ₹${amount} to ${sender.username}`,
+        html: `
+    <div style="font-family: Arial, sans-serif; background:#f9f9f9; padding:20px;">
+      <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
         
-        // Validate required fields
-        if (!sender || !receiver || !amount || !expense) {
-            return res.status(400).json({ message: "sender, receiver, amount, and expense are required" });
-        }
-        
-        if (!sender.username || !sender.email) {
-            return res.status(400).json({ message: "sender must have username and email" });
-        }
-        
-        if (!receiver.username || !receiver.email) {
-            return res.status(400).json({ message: "receiver must have username and email" });
-        }
-
-        // Try multiple SMTP configurations for better reliability
-        const smtpConfigs = [
-            {
-                host: "smtp.gmail.com",
-                port: 587,
-                secure: false,
-                auth: {
-                    user: "maharshibhattisro@gmail.com",
-                    pass: "ydff hjsv prgm ysum"
-                },
-                tls: {
-                    rejectUnauthorized: false
-                },
-                connectionTimeout: 30000,
-                greetingTimeout: 15000,
-                socketTimeout: 30000
-            },
-            {
-                host: "smtp.gmail.com",
-                port: 465,
-                secure: true,
-                auth: {
-                    user: "maharshibhattisro@gmail.com",
-                    pass: "ydff hjsv prgm ysum"
-                },
-                tls: {
-                    rejectUnauthorized: false
-                },
-                connectionTimeout: 30000,
-                greetingTimeout: 15000,
-                socketTimeout: 30000
-            }
-        ];
-
-        let lastError = null;
-        let info = null;
-
-        for (let i = 0; i < smtpConfigs.length; i++) {
-            try {
-                console.log(`🔄 Trying SMTP config ${i + 1}/${smtpConfigs.length}...`);
-                const transporter = nm.createTransport(smtpConfigs[i]);
-                
-                // Test connection first
-                await transporter.verify();
-                console.log(`✅ SMTP connection verified with config ${i + 1}`);
-                
-                info = await transporter.sendMail({
-                    from: "maharshibhattisro@gmail.com", // Use fixed sender
-                    to: receiver.email,
-                    subject: `You owe ₹${amount} to ${sender.username}`,
-                    html: `
-  <div style="font-family: Arial, sans-serif; background:#f9f9f9; padding:20px;">
-    <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-      
-      <!-- Header -->
-      <div style="background:#4CAF50; padding:15px; text-align:center; color:#fff;">
-        <h2 style="margin:0;">💸 Expense Reminder</h2>
-      </div>
-
-      <!-- Body -->
-      <div style="padding:20px; color:#333;">
-        <p style="font-size:16px;">
-          Hi <b>${receiver.username}</b>,
-        </p>
-
-        <p style="font-size:16px;">
-          You owe <b>₹${amount}</b> to <b>${sender.username}</b>.
-        </p>
-
-        <table style="width:100%; margin-top:20px; border-collapse:collapse;">
-          <tr>
-            <td style="padding:10px; border:1px solid #ddd;"><b>Description</b></td>
-            <td style="padding:10px; border:1px solid #ddd;">${expense.description}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px; border:1px solid #ddd;"><b>Date</b></td>
-            <td style="padding:10px; border:1px solid #ddd;">${new Date(expense.date).toLocaleDateString()}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px; border:1px solid #ddd;"><b>Status</b></td>
-            <td style="padding:10px; border:1px solid #ddd; color:${expense.status ? 'green' : 'red'};">
-              ${expense.status ? "✅ Paid" : "❌ Pending"}
-            </td>
-          </tr>
-        </table>
-
-        <p style="margin-top:20px; font-size:14px; color:#555;">
-          Please settle this amount as soon as possible.
-        </p>
-      </div>
-
-      <!-- Footer -->
-      <div style="background:#f1f1f1; padding:15px; text-align:center; font-size:12px; color:#777;">
-        <p style="margin:0;">This email was sent by <b>Mil Baat Kar</b> Expense Tracker.</p>
+        <!-- Header -->
+        <div style="background:#4CAF50; padding:15px; text-align:center; color:#fff;">
+          <h2 style="margin:0;">💸 Expense Reminder</h2>
+        </div>
+  
+        <!-- Body -->
+        <div style="padding:20px; color:#333;">
+          <p style="font-size:16px;">
+            Hi <b>${receiver.username}</b>,
+          </p>
+  
+          <p style="font-size:16px;">
+            You owe <b>₹${amount}</b> to <b>${sender.username}</b>.
+          </p>
+  
+          <table style="width:100%; margin-top:20px; border-collapse:collapse;">
+            <tr>
+              <td style="padding:10px; border:1px solid #ddd;"><b>Description</b></td>
+              <td style="padding:10px; border:1px solid #ddd;">${expense.description}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px; border:1px solid #ddd;"><b>Date</b></td>
+              <td style="padding:10px; border:1px solid #ddd;">${new Date(expense.date).toLocaleDateString()}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px; border:1px solid #ddd;"><b>Status</b></td>
+              <td style="padding:10px; border:1px solid #ddd; color:${expense.status ? 'green' : 'red'};">
+                ${expense.status ? "✅ Paid" : "❌ Pending"}
+              </td>
+            </tr>
+          </table>
+  
+          <p style="margin-top:20px; font-size:14px; color:#555;">
+            Please settle this amount as soon as possible.
+          </p>
+        </div>
+  
+        <!-- Footer -->
+        <div style="background:#f1f1f1; padding:15px; text-align:center; font-size:12px; color:#777;">
+          <p style="margin:0;">This email was sent by <b>Mil Baat Kar</b> Expense Tracker.</p>
+        </div>
       </div>
     </div>
-  </div>
-`
-                });
-                
-                console.log("✅ Email sent successfully:", info.messageId);
-                break; // Success, exit the loop
-                
-            } catch (error) {
-                console.log(`❌ SMTP config ${i + 1} failed:`, error.message);
-                lastError = error;
-                continue; // Try next config
-            }
-        }
-
-        if (!info) {
-            throw lastError || new Error("All SMTP configurations failed");
-        }
-        
-        res.status(200).json({ message: "Email sent successfully", messageId: info.messageId });
-        
-    }catch(error){
-        console.error("❌ Error sending email:", error);
-        res.status(500).json({ message: "Server error", error: error.message });
+  `
+      };
+  
+      // ✅ Send email
+      await sgMail.send(msg);
+  
+      console.log("✅ Email sent successfully");
+      res.status(200).json({ message: "Email sent successfully" });
+  
+    } catch (error) {
+      console.error("❌ Error sending email:", error);
+      res.status(500).json({ message: "Server error", error: error.message });
     }
-})
+  });
 
 // Get all alerts
 app.get('/api/alerts', async (req, res) => {

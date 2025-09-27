@@ -156,26 +156,7 @@ function History() {
       }
       
       // Send email reminder
-      const emailRes = await fetch("https://milbantkar-1.onrender.com/api/email/reminder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sender: {
-            username: sender.username,
-            email: sender.email
-          },
-          receiver: {
-            username: receiver.username,
-            email: receiver.email
-          },
-          amount: exp.amount,
-          expense: {
-            description: exp.description,
-            date: exp.date,
-            status: exp.status
-          }
-        })
-      });
+      
       
       // Also create in-app alert
       const alertRes = await fetch("https://milbantkar-1.onrender.com/api/alerts/create", {
