@@ -13,6 +13,7 @@ import Profile from './components/Profile';
 import EventPage from './components/EventPage';
 import Visualise from './pages/Visualise';
 import AdminPanel from './pages/AdminPanel';
+import Help from './pages/Help';
 function App() {
   return (
     <Router>
@@ -33,6 +34,7 @@ function App() {
             <Route path='/events/:eventId' element={<EventPage />}/>
             <Route path='/visualise' element={<Visualise/>}/>
             <Route path='/admin' element={<AdminPanel/>}/>
+            <Route path='/help' element={<Help/>}/>
           </Routes>
         </main>
 

@@ -123,7 +123,7 @@ function History() {
     setUpdatingStatus(null);
   };
 
-  // Send reminder alert + email to receiver
+  // Send reminder alert to receiver
   const sendReminder = async (exp) => {
     if (!userId) {
       alert("User info not loaded. Please try again.");
@@ -131,59 +131,23 @@ function History() {
     }
     
     try {
-      // First, get sender and receiver user details
-      const [senderRes, receiverRes] = await Promise.all([
-        fetch(`https://milbantkar-1.onrender.com/api/user/${exp.paidBy.username || exp.paidBy}`),
-        fetch(`https://milbantkar-1.onrender.com/api/user/${exp.paidTo.username || exp.paidTo}`)
-      ]);
+      // Get receiver user details
+      const receiverRes = await fetch(`https://milbantkar-1.onrender.com/api/user/${exp.paidTo.username || exp.paidTo}`);
       
-      if (!senderRes.ok || !receiverRes.ok) {
+      if (!receiverRes.ok) {
         alert("Failed to fetch user details. Please try again.");
         return;
       }
       
-      const [senderData, receiverData] = await Promise.all([
-        senderRes.json(),
-        receiverRes.json()
-      ]);
-      
-      const sender = senderData[0]; // API returns array
+      const receiverData = await receiverRes.json();
       const receiver = receiverData[0]; // API returns array
       
-      if (!sender || !receiver) {
+      if (!receiver) {
         alert("User details not found. Please try again.");
         return;
       }
       
-      // Send email reminder
-      const emailPayload = {
-        sender: {
-          username: sender.username,
-          email: sender.email
-        },
-        receiver: {
-          username: receiver.username,
-          email: receiver.email
-        },
-        amount: exp.amount,
-        expense: {
-          description: exp.description,
-          date: exp.date,
-          status: exp.status
-        }
-      };
-      
-      console.log('📧 Sending email reminder with payload:', emailPayload);
-      
-      const emailRes = await fetch("https://milbantkar-1.onrender.com/api/email/reminder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(emailPayload)
-      });
-      
-      console.log('📧 Email response status:', emailRes.status);
-      
-      // Also create in-app alert
+      // Create in-app alert
       const alertRes = await fetch("https://milbantkar-1.onrender.com/api/alerts/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -196,16 +160,11 @@ function History() {
         })
       });
       
-      if (emailRes.ok && alertRes.ok) {
-        alert(`Reminder sent to ${receiver.username} (email + in-app alert)`);
+      if (alertRes.ok) {
+        alert(`Reminder sent to ${receiver.username}`);
       } else {
-        const emailData = await emailRes.json().catch(() => ({}));
         const alertData = await alertRes.json().catch(() => ({}));
-        
-        console.error('📧 Email error response:', emailData);
-        console.error('📧 Alert error response:', alertData);
-        
-        alert(`Reminder partially sent. Email: ${emailRes.ok ? 'Success' : emailData.message || 'Failed'}, Alert: ${alertRes.ok ? 'Success' : alertData.message || 'Failed'}`);
+        alert("Failed to send reminder: " + (alertData.message || "Unknown error"));
       }
     } catch (err) {
       console.error("Error sending reminder:", err);
