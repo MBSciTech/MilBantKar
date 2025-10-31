@@ -56,9 +56,47 @@ const Profile = ({ username }) => {
   const handleProfilePicChange = (event) => {
     const file = event.target.files[0];
     if (file) {
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB. Please choose a smaller image.');
+        event.target.value = ''; // Reset file input
+        return;
+      }
+      
       const reader = new FileReader();
       reader.onload = (e) => {
-        setProfilePicPreview(e.target.result);
+        // Compress the image to reduce payload size
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxWidth = 800; // Max width for profile pic
+          const maxHeight = 800; // Max height for profile pic
+          let width = img.width;
+          let height = img.height;
+          
+          // Calculate new dimensions
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to base64 with quality compression
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          setProfilePicPreview(compressedDataUrl);
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     }
@@ -87,13 +125,29 @@ const Profile = ({ username }) => {
         setUser(updatedUser);
         setEditing(false);
         setProfilePicPreview(null);
+        // Update localStorage username if changed
+        if (editForm.username && editForm.username !== user.username) {
+          localStorage.setItem('username', editForm.username);
+        }
+        alert('Profile updated successfully!');
       } else {
-        const err = await response.json();
-        alert(err.message || 'Failed to update profile');
+        let errorMessage = 'Failed to update profile';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          // Handle HTML error responses (like 413)
+          if (response.status === 413) {
+            errorMessage = 'Image is too large. Please choose a smaller image (recommended: under 1MB).';
+          } else {
+            errorMessage = `Error: ${response.status} ${response.statusText}`;
+          }
+        }
+        alert(errorMessage);
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('Error saving profile');
+      alert('Network error. Please check your connection and try again.');
     } finally {
       setSaving(false);
     }
