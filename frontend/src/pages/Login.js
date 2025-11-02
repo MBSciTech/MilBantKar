@@ -162,7 +162,7 @@ function Login() {
         localStorage.setItem('authToken', data.token || 'dummy-token'); // In real app, use actual token
 
         setTimeout(() => {
-          window.location.href = '/dashboard';
+        window.location.href = '/dashboard';
         }, 1500);
       } else {
         showNotification(data.error || 'Invalid credentials!', 'error');
@@ -584,14 +584,14 @@ function Login() {
           <div className="row justify-content-center">
             <div className="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-4">
               <div className="login-card p-4 p-md-5">
-                <div className="text-center mb-4">
+              <div className="text-center mb-4">
                   <div className="gradient-icon rounded-circle d-inline-flex align-items-center justify-content-center mb-3" 
                        style={{width: '80px', height: '80px'}}>
                     <span className="text-white fs-1">💰</span>
-                  </div>
+                </div>
                   <h2 className="fw-bold mb-2" style={{color: '#2d3748'}}>Welcome Back</h2>
                   <p className="text-muted mb-0">Sign in to manage your expenses</p>
-                </div>
+              </div>
 
                 <button 
                   type="button"
@@ -602,24 +602,24 @@ function Login() {
                 </button>
 
                 <form onSubmit={handleSubmit} noValidate>
-                  <div className="mb-3">
+                <div className="mb-3">
                     <label htmlFor="username" className="form-label fw-semibold" style={{color: '#2d3748'}}>
                       Username
                     </label>
                     <div className="input-with-icon">
                       <span className="input-icon">👤</span>
-                      <input 
-                        type="text" 
+                    <input 
+                      type="text" 
                         className={getInputClassName('username')}
-                        id="username"
-                        name="username" 
-                        placeholder="Enter your username" 
-                        value={formData.username}
-                        onChange={handleChange}
+                      id="username"
+                      name="username" 
+                      placeholder="Enter your username" 
+                      value={formData.username}
+                      onChange={handleChange} 
                         onBlur={handleBlur}
-                        required 
-                      />
-                    </div>
+                      required 
+                    />
+                  </div>
                     {errors.username && touched.username && (
                       <div className="error-message">
                         <span>⚠️</span> {errors.username}
@@ -630,7 +630,7 @@ function Login() {
                         <span>✓</span> Username looks good!
                       </div>
                     )}
-                  </div>
+                </div>
 
                   <div className="mb-3">
                     <label htmlFor="password" className="form-label fw-semibold" style={{color: '#2d3748'}}>
@@ -638,17 +638,17 @@ function Login() {
                     </label>
                     <div className="input-with-icon position-relative">
                       <span className="input-icon">🔒</span>
-                      <input 
+                    <input 
                         type={showPassword ? "text" : "password"} 
                         className={getInputClassName('password')}
-                        id="password"
-                        name="password" 
-                        placeholder="Enter your password" 
-                        value={formData.password} 
-                        onChange={handleChange}
+                      id="password"
+                      name="password" 
+                      placeholder="Enter your password" 
+                      value={formData.password} 
+                      onChange={handleChange} 
                         onBlur={handleBlur}
-                        required 
-                      />
+                      required 
+                    />
                       <button
                         type="button"
                         className="password-toggle"
@@ -665,12 +665,12 @@ function Login() {
                     {!errors.password && touched.password && formData.password && (
                       <div className="success-message">
                         <span>✓</span> Password entered
-                      </div>
-                    )}
                   </div>
+                    )}
+                </div>
 
-                  <div className="d-flex justify-content-between align-items-center mb-4">
-                    <div className="form-check">
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                  <div className="form-check">
                       <input 
                         className="form-check-input" 
                         type="checkbox" 
@@ -678,38 +678,38 @@ function Login() {
                         checked={rememberMe}
                         onChange={handleRememberMe}
                       />
-                      <label className="form-check-label text-muted" htmlFor="rememberMe">
-                        Remember me
-                      </label>
-                    </div>
-                    <a href="#" className="link-primary text-decoration-none">Forgot password?</a>
+                    <label className="form-check-label text-muted" htmlFor="rememberMe">
+                      Remember me
+                    </label>
                   </div>
+                    <a href="#" className="link-primary text-decoration-none">Forgot password?</a>
+                </div>
 
-                  <button 
-                    type="submit" 
+                <button 
+                  type="submit" 
                     className="btn btn-login text-white w-100 fw-semibold mb-3"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                        Signing in...
-                      </>
-                    ) : (
-                      'Sign In'
-                    )}
-                  </button>
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Signing in...
+                    </>
+                  ) : (
+                    'Sign In'
+                  )}
+                </button>
 
                   <div className="text-center">
-                    <span className="text-muted">Don't have an account? </span>
+                  <span className="text-muted">Don't have an account? </span>
                     <a href="/signup" className="link-primary text-decoration-none fw-semibold">Sign up</a>
-                  </div>
-                </form>
-              </div>
+                </div>
+              </form>
             </div>
           </div>
         </div>
       </div>
+    </div>
     </>
   );
 }

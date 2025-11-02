@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
 function Signup() {
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    phone: '',
-    password: ''
-  });
-  const [isLoading, setIsLoading] = useState(false);
+    const [formData, setFormData] = useState({
+      username: '',
+      email: '',
+      phone: '',
+      password: ''
+    });
+    const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -74,8 +74,8 @@ function Signup() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
-  const handleChange = (e) => {
+  
+    const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
     
@@ -88,10 +88,10 @@ function Signup() {
     const { name } = e.target;
     setTouched({ ...touched, [name]: true });
     validateField(name, formData[name]);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+    };
+  
+    const handleSubmit = async (e) => {
+      e.preventDefault();
     
     // Mark all fields as touched
     const allTouched = Object.keys(formData).reduce((acc, key) => {
@@ -115,15 +115,15 @@ function Signup() {
       return;
     }
     
-    setIsLoading(true);
-    
-    try {
-      const res = await fetch('https://milbantkar-1.onrender.com/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      const data = await res.json();
+      setIsLoading(true);
+      
+      try {
+        const res = await fetch('https://milbantkar-1.onrender.com/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        const data = await res.json();
       
       if (res.ok) {
         // Success notification
@@ -134,13 +134,13 @@ function Signup() {
       } else {
         showNotification(data.message || 'Signup failed!', 'error');
       }
-    } catch (err) {
-      console.error(err);
+      } catch (err) {
+        console.error(err);
       showNotification('Network error! Please try again.', 'error');
     } finally {
-      setIsLoading(false);
-    }
-  };
+        setIsLoading(false);
+      }
+    };
 
   const showNotification = (message, type) => {
     // Remove existing notifications
@@ -180,9 +180,9 @@ function Signup() {
       return `${baseClass} is-valid`;
     }
     return baseClass;
-  };
-
-  return (
+    };
+  
+    return (
     <>
       <style>{`
         .signup-container {
@@ -550,7 +550,7 @@ function Signup() {
                   <h2 className="fw-bold mb-2" style={{color: '#2d3748'}}>Create Account</h2>
                   <p className="text-muted mb-0">Start managing your expenses today</p>
                 </div>
-
+  
                 <form onSubmit={handleSubmit} noValidate>
                   <div className="mb-3">
                     <label htmlFor="username" className="form-label fw-semibold" style={{color: '#2d3748'}}>
@@ -565,7 +565,7 @@ function Signup() {
                         name="username" 
                         placeholder="Choose a username" 
                         value={formData.username}
-                        onChange={handleChange}
+                        onChange={handleChange} 
                         onBlur={handleBlur}
                         required 
                       />
@@ -581,7 +581,7 @@ function Signup() {
                       </div>
                     )}
                   </div>
-
+  
                   <div className="mb-3">
                     <label htmlFor="email" className="form-label fw-semibold" style={{color: '#2d3748'}}>
                       Email
@@ -595,7 +595,7 @@ function Signup() {
                         name="email" 
                         placeholder="Enter your email" 
                         value={formData.email}
-                        onChange={handleChange}
+                        onChange={handleChange} 
                         onBlur={handleBlur}
                         required 
                       />
@@ -611,7 +611,7 @@ function Signup() {
                       </div>
                     )}
                   </div>
-
+  
                   <div className="mb-3">
                     <label htmlFor="phone" className="form-label fw-semibold" style={{color: '#2d3748'}}>
                       Phone <span className="text-muted fw-normal">(Optional)</span>
@@ -625,7 +625,7 @@ function Signup() {
                         name="phone" 
                         placeholder="Enter your phone number" 
                         value={formData.phone}
-                        onChange={handleChange}
+                        onChange={handleChange} 
                         onBlur={handleBlur}
                       />
                     </div>
@@ -635,7 +635,7 @@ function Signup() {
                       </div>
                     )}
                   </div>
-
+  
                   <div className="mb-3">
                     <label htmlFor="password" className="form-label fw-semibold" style={{color: '#2d3748'}}>
                       Password
@@ -649,7 +649,7 @@ function Signup() {
                         name="password" 
                         placeholder="Create a secure password" 
                         value={formData.password}
-                        onChange={handleChange}
+                        onChange={handleChange} 
                         onBlur={handleBlur}
                         required 
                       />
@@ -683,17 +683,17 @@ function Signup() {
                     {!errors.password && touched.password && formData.password && (
                       <div className="success-message">
                         <span>✓</span> Strong password!
-                      </div>
+                    </div>
                     )}
                   </div>
-
+  
                   <div className="form-check mb-4">
                     <input className="form-check-input" type="checkbox" id="terms" required />
                     <label className="form-check-label text-muted" htmlFor="terms">
                       I agree to the <a href="#" className="link-primary text-decoration-none">Terms of Service</a> and <a href="#" className="link-primary text-decoration-none">Privacy Policy</a>
                     </label>
                   </div>
-
+  
                   <button 
                     type="submit" 
                     className="btn btn-signup text-white w-100 fw-semibold mb-3"
@@ -708,19 +708,19 @@ function Signup() {
                       'Create Account'
                     )}
                   </button>
-
+  
                   <div className="text-center">
                     <span className="text-muted">Already have an account? </span>
                     <a href="/login" className="link-primary text-decoration-none fw-semibold">Sign in</a>
                   </div>
                 </form>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
     </>
-  );
-}
+    );
+  }
 
 export default Signup;

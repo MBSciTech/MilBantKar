@@ -139,7 +139,7 @@ const Profile = ({ username }) => {
           // Handle HTML error responses (like 413)
           if (response.status === 413) {
             errorMessage = 'Image is too large. Please choose a smaller image (recommended: under 1MB).';
-          } else {
+      } else {
             errorMessage = `Error: ${response.status} ${response.statusText}`;
           }
         }

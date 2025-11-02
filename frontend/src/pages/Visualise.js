@@ -426,104 +426,104 @@ function Visualise() {
         </div>
       </div>
 
-      {/* Sci-fi Transaction Details Modal */}
-      {selectedTransaction && (
-        <div 
-          className={`modal fade ${showModal ? 'show d-block' : ''}`} 
-          tabIndex="-1"
-          style={{ backgroundColor: showModal ? 'rgba(0,0,0,0.8)' : 'transparent' }}
-        >
-          <div className="modal-dialog modal-lg modal-dialog-centered">
+{/* Sci-fi Transaction Details Modal */}
+{selectedTransaction && (
+    <div 
+        className={`modal fade ${showModal ? 'show d-block' : ''}`} 
+        tabIndex="-1"
+        style={{ backgroundColor: showModal ? 'rgba(0,0,0,0.8)' : 'transparent' }}
+    >
+        <div className="modal-dialog modal-lg modal-dialog-centered">
             <div 
-              className="modal-content border-0"
-              style={{ 
-                background: 'rgba(12,12,12,0.95)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(0,212,255,0.3)!important',
-                borderRadius: '15px',
-                boxShadow: '0 0 50px rgba(0,212,255,0.3)'
-              }}
+                className="modal-content border-0"
+                style={{ 
+                    background: 'rgba(12,12,12,0.95)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(0,212,255,0.3)!important',
+                    borderRadius: '15px',
+                    boxShadow: '0 0 50px rgba(0,212,255,0.3)'
+                }}
             >
-              <div 
-                className="modal-header border-0"
-                style={{ background: 'linear-gradient(90deg, rgba(0,212,255,0.2), rgba(255,51,102,0.2))' }}
-              >
-                <h5 
-                  className="modal-title"
-                  style={{ 
-                    fontFamily: 'Orbitron, monospace', 
-                    color: '#00d4ff',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1px'
-                  }}
+                <div 
+                    className="modal-header border-0"
+                    style={{ background: 'linear-gradient(90deg, rgba(0,212,255,0.2), rgba(255,51,102,0.2))' }}
                 >
-                  <i className="fas fa-database me-2"></i>
-                  TRANSACTION DATA MATRIX
-                </h5>
-                <button 
-                  type="button" 
-                  className="btn-close btn-close-white" 
-                  onClick={() => setShowModal(false)}
-                  style={{ filter: 'drop-shadow(0 0 5px rgba(0,212,255,0.5))' }}
-                ></button>
-              </div>
-              <div className="modal-body" style={{ color: '#ffffff' }}>
-                <div className="row mb-4">
-                  <div className="col-md-6">
-                    <div 
-                      className="card border-0"
-                      style={{ 
-                        background: 'rgba(255,51,102,0.1)',
-                        border: '1px solid rgba(255,51,102,0.3)!important',
-                        borderRadius: '10px'
-                      }}
+                    <h5 
+                        className="modal-title"
+                        style={{ 
+                            fontFamily: 'Orbitron, monospace', 
+                            color: '#00d4ff',
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px'
+                        }}
                     >
-                      <div className="card-body text-center">
-                        <h6 className="mb-1" style={{ 
-                          fontFamily: 'Orbitron, monospace', 
-                          color: '#ff3366',
-                          textTransform: 'uppercase',
-                          fontSize: '12px'
-                        }}>SOURCE NODE</h6>
-                        <h4 className="mb-0" style={{ 
-                          fontFamily: 'Orbitron, monospace',
-                          color: '#ffffff'
-                        }}>
-                          {selectedTransaction.fromUser}
-                        </h4>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div 
-                      className="card border-0"
-                      style={{ 
-                        background: 'rgba(0,212,255,0.1)',
-                        border: '1px solid rgba(0,212,255,0.3)!important',
-                        borderRadius: '10px'
-                      }}
-                    >
-                      <div className="card-body text-center">
-                        <h6 className="mb-1" style={{ 
-                          fontFamily: 'Orbitron, monospace', 
-                          color: '#00d4ff',
-                          textTransform: 'uppercase',
-                          fontSize: '12px'
-                        }}>TARGET NODE</h6>
-                        <h4 className="mb-0" style={{ 
-                          fontFamily: 'Orbitron, monospace',
-                          color: '#ffffff'
-                        }}>
-                          {selectedTransaction.toUser}
-                        </h4>
-                      </div>
-                    </div>
-                  </div>
+                        <i className="fas fa-database me-2"></i>
+                        TRANSACTION DATA MATRIX
+                    </h5>
+                    <button 
+                        type="button" 
+                        className="btn-close btn-close-white" 
+                        onClick={() => setShowModal(false)}
+                        style={{ filter: 'drop-shadow(0 0 5px rgba(0,212,255,0.5))' }}
+                    ></button>
                 </div>
+                <div className="modal-body" style={{ color: '#ffffff' }}>
+                    <div className="row mb-4">
+                        <div className="col-md-6">
+                            <div 
+                                className="card border-0"
+                                style={{ 
+                                    background: 'rgba(255,51,102,0.1)',
+                                    border: '1px solid rgba(255,51,102,0.3)!important',
+                                    borderRadius: '10px'
+                                }}
+                            >
+                                <div className="card-body text-center">
+                                    <h6 className="mb-1" style={{ 
+                                        fontFamily: 'Orbitron, monospace', 
+                                        color: '#ff3366',
+                                        textTransform: 'uppercase',
+                                        fontSize: '12px'
+                                    }}>SOURCE NODE</h6>
+                                    <h4 className="mb-0" style={{ 
+                                        fontFamily: 'Orbitron, monospace',
+                                        color: '#ffffff'
+                                    }}>
+                                        {selectedTransaction.fromUser}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-6">
+                            <div 
+                                className="card border-0"
+                                style={{ 
+                                    background: 'rgba(0,212,255,0.1)',
+                                    border: '1px solid rgba(0,212,255,0.3)!important',
+                                    borderRadius: '10px'
+                                }}
+                            >
+                                <div className="card-body text-center">
+                                    <h6 className="mb-1" style={{ 
+                                        fontFamily: 'Orbitron, monospace', 
+                                        color: '#00d4ff',
+                                        textTransform: 'uppercase',
+                                        fontSize: '12px'
+                                    }}>TARGET NODE</h6>
+                                    <h4 className="mb-0" style={{ 
+                                        fontFamily: 'Orbitron, monospace',
+                                        color: '#ffffff'
+                                    }}>
+                                        {selectedTransaction.toUser}
+                                    </h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                <div className="row mb-4">
-                  <div className="col-md-4">
-                    <div className="text-center">
+                    <div className="row mb-4">
+                        <div className="col-md-4">
+    <div className="text-center">
                       <h6 className="mb-1" style={{ 
                         fontFamily: 'Orbitron, monospace', 
                         color: '#ff3366',
@@ -534,10 +534,10 @@ function Visualise() {
                         fontFamily: 'Orbitron, monospace',
                         color: '#ffffff'
                       }}>₹{getTotalAmount(selectedTransaction.transactions)}</h3>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="text-center">
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="text-center">
                       <h6 className="mb-1" style={{ 
                         fontFamily: 'Orbitron, monospace', 
                         color: '#00d4ff',
@@ -548,10 +548,10 @@ function Visualise() {
                         fontFamily: 'Orbitron, monospace',
                         color: '#ffffff'
                       }}>₹{getPaidAmount(selectedTransaction.transactions)}</h3>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="text-center">
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="text-center">
                       <h6 className="mb-1" style={{ 
                         fontFamily: 'Orbitron, monospace', 
                         color: '#ffcc00',
@@ -562,11 +562,11 @@ function Visualise() {
                         fontFamily: 'Orbitron, monospace',
                         color: '#ffffff'
                       }}>
-                        ₹{getTotalAmount(selectedTransaction.transactions) - getPaidAmount(selectedTransaction.transactions)}
-                      </h3>
+                                    ₹{getTotalAmount(selectedTransaction.transactions) - getPaidAmount(selectedTransaction.transactions)}
+                                </h3>
+                            </div>
+                        </div>
                     </div>
-                  </div>
-                </div>
 
                 <h6 className="border-bottom pb-2 mb-3" style={{ 
                   fontFamily: 'Orbitron, monospace',
@@ -574,8 +574,8 @@ function Visualise() {
                   textTransform: 'uppercase'
                 }}>
                   INDIVIDUAL TRANSACTIONS ({selectedTransaction.transactions.length})
-                </h6>
-                
+                    </h6>
+                    
                 <div className="table-responsive" style={{ maxHeight: '300px' ,}}>
                   <table className="table" style={{ color: '#ffffff', borderColor: 'rgba(0, 0, 0, 0.3)',backgroundColor:'rgba(0,0,0,0)'}}>
                     <thead style={{ 
@@ -589,23 +589,23 @@ function Visualise() {
                         <th style={{ color: '#00d4ff' }}>DESCRIPTION</th>
                         <th style={{ color: '#00d4ff' }}>AMOUNT</th>
                         <th style={{ color: '#00d4ff' }}>STATUS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedTransaction.transactions.map((transaction, index) => (
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {selectedTransaction.transactions.map((transaction, index) => (
                         <tr key={index} style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
                           <td className="small">
-                            {formatDate(transaction.date)}
-                          </td>
-                          <td>
-                            <div>
-                              {transaction.description || 'No description'}
-                            </div>
-                          </td>
-                          <td>
-                            <strong>₹{transaction.amount}</strong>
-                          </td>
-                          <td>
+                                            {formatDate(transaction.date)}
+                                        </td>
+                                        <td>
+                                            <div>
+                                                {transaction.description || 'No description'}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <strong>₹{transaction.amount}</strong>
+                                        </td>
+                                        <td>
                             <span 
                               className={`badge ${transaction.status ? 'bg-success' : 'bg-warning'}`}
                               style={{ 
@@ -615,22 +615,22 @@ function Visualise() {
                                 letterSpacing: '1px'
                               }}
                             >
-                              {transaction.status ? 'Paid' : 'Pending'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                                                {transaction.status ? 'Paid' : 'Pending'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-              </div>
               <div className="modal-footer border-0" style={{ 
                 background: 'linear-gradient(90deg, rgba(0,212,255,0.1), rgba(255,51,102,0.1))' 
               }}>
-                <button 
-                  type="button" 
+                    <button 
+                        type="button" 
                   className="btn btn-sm" 
-                  onClick={() => setShowModal(false)}
+                        onClick={() => setShowModal(false)}
                   style={{ 
                     background: 'rgba(255,51,102,0.3)',
                     border: '1px solid rgba(255,51,102,0.5)',
@@ -641,63 +641,63 @@ function Visualise() {
                   }}
                 >
                   Close Matrix
-                </button>
-              </div>
+                    </button>
+                </div>
             </div>
-          </div>
         </div>
-      )}
+    </div>
+)}
 
-      <link 
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" 
-        rel="stylesheet" 
-      />
-      <link 
-        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" 
-        rel="stylesheet" 
-      />
-      
-      <style>{`
-        body {
-          background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
-          font-family: 'Orbitron', monospace;
+<link 
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" 
+    rel="stylesheet" 
+/>
+<link 
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" 
+    rel="stylesheet" 
+/>
+
+<style>{`
+    body {
+        background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+        font-family: 'Orbitron', monospace;
           overflow: hidden;
-        }
-        
-        /* Custom scrollbar for sci-fi look */
-        ::-webkit-scrollbar {
-          width: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-          background: rgba(0,0,0,0.3);
-          border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-          background: linear-gradient(45deg, #00d4ff, #0099cc);
-          border-radius: 4px;
-          box-shadow: 0 0 10px rgba(0,212,255,0.5);
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(45deg, #00ff88, #00cc66);
-          box-shadow: 0 0 15px rgba(0,255,136,0.5);
-        }
-        
-        /* Glowing animation for elements */
-        @keyframes glow {
-          0% { box-shadow: 0 0 5px currentColor; }
-          50% { box-shadow: 0 0 20px currentColor; }
-          100% { box-shadow: 0 0 5px currentColor; }
-        }
-        
-        .glow-effect {
-          animation: glow 2s infinite;
-        }
-      `}</style>
-    </>
-  );
+    }
+    
+    /* Custom scrollbar for sci-fi look */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.3);
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(45deg, #00d4ff, #0099cc);
+        border-radius: 4px;
+        box-shadow: 0 0 10px rgba(0,212,255,0.5);
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(45deg, #00ff88, #00cc66);
+        box-shadow: 0 0 15px rgba(0,255,136,0.5);
+    }
+    
+    /* Glowing animation for elements */
+    @keyframes glow {
+        0% { box-shadow: 0 0 5px currentColor; }
+        50% { box-shadow: 0 0 20px currentColor; }
+        100% { box-shadow: 0 0 5px currentColor; }
+    }
+    
+    .glow-effect {
+        animation: glow 2s infinite;
+    }
+`}</style>
+</>
+);
 }
 
 export default Visualise;

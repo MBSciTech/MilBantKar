@@ -12,7 +12,6 @@ import {
   QrCode,
   Zap,
   Gift,
-  
 } from "lucide-react";
 
 const API_BASE = "https://milbantkar-1.onrender.com";
@@ -25,31 +24,43 @@ function Events({ user }) {
   const [loading, setLoading] = useState(false);
   const [animatingCards, setAnimatingCards] = useState(false);
   const navigate = useNavigate();
+
   // Fetch user's events
   useEffect(() => {
     if (user?.userId) {
       setLoading(true);
       fetch(`${API_BASE}/api/events/user/${user.userId}`)
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          return res.json();
+        })
         .then((data) => {
-          setEvents(data);
+          setEvents(Array.isArray(data) ? data : []);
           setAnimatingCards(true);
           setTimeout(() => setAnimatingCards(false), 1000);
         })
-        .catch((err) => console.error("Error fetching events:", err))
+        .catch((err) => {
+          console.error("Error fetching events:", err);
+          setEvents([]);
+        })
         .finally(() => setLoading(false));
     }
   }, [user]);
 
   // Create new event
   const handleCreateEvent = async () => {
-    console.log(user)
-    if (!newEvent.name.trim() || !user || !user.userId) {
+    console.log(user);
+    if (!newEvent.name.trim()) {
+      showNotification("Please enter an event name", "error");
+      return;
+    }
+    
+    if (!user?.userId) {
       showNotification("User not loaded. Please log in again.", "error");
       return;
     }
-
-
 
     setLoading(true);
     try {
@@ -64,22 +75,20 @@ function Events({ user }) {
         }),
       });
       
-      const res = await response.json();
-      
-      if (response.ok) {
-        // Success animation
-        const newEventData = res.event;
-        setEvents([newEventData, ...events]);
-        setNewEvent({ name: "", description: "" });
-        
-        // Show success notification
-        showNotification("Event created successfully! 🎉", "success");
-      } else {
-        throw new Error(res.message || 'Failed to create event');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
+      
+      const res = await response.json();
+      const newEventData = res.event || res;
+      setEvents(prevEvents => [newEventData, ...prevEvents]);
+      setNewEvent({ name: "", description: "" });
+      
+      showNotification("Event created successfully! 🎉", "success");
     } catch (err) {
       console.error("Error creating event:", err);
-      showNotification("Failed to create event ❌", "error");
+      showNotification(err.message || "Failed to create event ❌", "error");
     } finally {
       setLoading(false);
     }
@@ -87,7 +96,15 @@ function Events({ user }) {
 
   // Join event by code
   const handleJoinEvent = async () => {
-    if (!joinCode.trim()) return;
+    if (!joinCode.trim()) {
+      showNotification("Please enter a join code", "error");
+      return;
+    }
+
+    if (!user?.userId) {
+      showNotification("User not loaded. Please log in again.", "error");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -95,35 +112,48 @@ function Events({ user }) {
         userId: user.userId,
       });
       
-      setEvents([res.data.event, ...events]);
+      const joinedEvent = res.data.event || res.data;
+      setEvents(prevEvents => [joinedEvent, ...prevEvents]);
       setJoinCode("");
       showNotification("Joined event successfully! ✅", "success");
     } catch (err) {
       console.error("Error joining event:", err);
-      showNotification("Failed to join event ❌", "error");
+      const errorMessage = err.response?.data?.message || "Failed to join event ❌";
+      showNotification(errorMessage, "error");
     } finally {
       setLoading(false);
     }
   };
 
   const showNotification = (message, type) => {
-    // Simple notification system - in a real app, you'd use a toast library
+    const existingNotifications = document.querySelectorAll('.notification');
+    existingNotifications.forEach(notification => notification.remove());
+    
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
     document.body.appendChild(notification);
     
     setTimeout(() => {
-      notification.remove();
+      if (notification.parentNode) {
+        notification.remove();
+      }
     }, 3000);
   };
 
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    showNotification("Code copied to clipboard! 📋", "success");
+    navigator.clipboard.writeText(text).then(() => {
+      showNotification("Code copied to clipboard! 📋", "success");
+    }).catch(() => {
+      showNotification("Failed to copy code", "error");
+    });
   };
 
-  // Custom styles
+  const getEventStatus = (event) => {
+    return event.isClose ? "Closed" : "Active";
+  };
+
+  // CSS Styles - All preserved from original
   const styles = `
     .events-container {
       min-height: 100vh;
@@ -600,6 +630,7 @@ function Events({ user }) {
                     <div className="col-12">
                       <button
                         onClick={handleCreateEvent}
+                        disabled={loading || !newEvent.name.trim()}
                         className={`btn btn-gradient w-100 ${loading ? 'pulse-animation' : ''}`}
                       >
                         {loading && <div className="spinner"></div>}
@@ -636,15 +667,26 @@ function Events({ user }) {
                     </div>
                     
                     <div className="col-12">
-                      <button
-                        onClick={handleJoinEvent}
-                        disabled={loading || !joinCode.trim()}
-                        className={`btn btn-success-gradient w-100 ${loading ? 'pulse-animation' : ''}`}
-                      >
-                        {loading && <div className="spinner"></div>}
-                        <Gift size={20} className="me-2" />
-                        Join Event
-                      </button>
+                      <div className="d-flex gap-3">
+                        <button
+                          onClick={handleJoinEvent}
+                          disabled={loading || !joinCode.trim()}
+                          className={`btn btn-success-gradient flex-fill ${loading ? 'pulse-animation' : ''}`}
+                        >
+                          {loading && <div className="spinner"></div>}
+                          <Gift size={20} className="me-2" />
+                          Join Event
+                        </button>
+                        <button
+                          onClick={() => navigate('/scanner')}
+                          disabled={loading}
+                          className="btn btn-gradient"
+                          style={{ minWidth: '180px' }}
+                        >
+                          <QrCode size={20} className="me-2" />
+                          Join with QR
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -687,14 +729,19 @@ function Events({ user }) {
                 ) : (
                   <div className="row g-3">
                     {events.map((event, index) => (
-                      <div key={event.userId} className="col-12 col-md-6 col-xl-4">
+                      <div key={event._id || event.id || index} className="col-12 col-md-6 col-xl-4">
                         <div className={`event-card ${animatingCards ? 'stagger-animation' : ''}`}>
                           <div className="d-flex align-items-start justify-content-between mb-3">
                             <div className="flex-grow-1">
                               <h5 className="text-white fw-bold mb-1">{event.name}</h5>
                               <p className="text-white-50 mb-0 small">{event.description || 'No description'}</p>
                             </div>
-                            <ArrowRight size={20} className="text-white-50 flex-shrink-0 ms-2" onClick={() => navigate(`/events/${event._id}`)} />
+                            <ArrowRight 
+                              size={20} 
+                              className="text-white-50 flex-shrink-0 ms-2" 
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => navigate(`/events/${event._id}`)} 
+                            />
                           </div>
                           
                           <div className="event-meta mb-3">
@@ -703,14 +750,14 @@ function Events({ user }) {
                               {event.participants?.length || 0} members
                             </span>
                             <span>
-                            ₹ {event.isClose ? "Active" : "Close"}
-                          </span>
-
+                              {getEventStatus(event)}
+                            </span>
                           </div>
                           
                           <div 
                             className="code-display"
                             onClick={() => copyToClipboard(event.code)}
+                            style={{ cursor: 'pointer' }}
                           >
                             <div className="d-flex align-items-center">
                               <QrCode size={16} className="me-2" />

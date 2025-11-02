@@ -14,6 +14,7 @@ import EventPage from './components/EventPage';
 import Visualise from './pages/Visualise';
 import AdminPanel from './pages/AdminPanel';
 import Help from './pages/Help';
+import QRScanner from './components/QRScanner';
 function App() {
   return (
     <Router>
@@ -35,6 +36,7 @@ function App() {
             <Route path='/visualise' element={<Visualise/>}/>
             <Route path='/admin' element={<AdminPanel/>}/>
             <Route path='/help' element={<Help/>}/>
+            <Route path='/scanner' element={<QRScanner/>}/>
           </Routes>
         </main>
 

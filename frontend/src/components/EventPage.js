@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import './EventPage.css';
 
+// Import QRCode component
+import QRCode from 'react-qr-code';
+
 function EventPage() {
     const { eventId } = useParams();
     const [event, setEvent] = useState(null);
@@ -35,6 +38,9 @@ function EventPage() {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [showExpenseDetails, setShowExpenseDetails] = useState(null);
     const [showQuickActions, setShowQuickActions] = useState(false);
+
+    // QR Code state
+    const [showQRCode, setShowQRCode] = useState(false);
 
     // Expense categories
     const categories = [
@@ -264,8 +270,8 @@ function EventPage() {
                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                     
                     try {
-                        const contentType = response.headers.get('content-type');
-                        if (contentType && contentType.includes('application/json')) {
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
                             return await response.json();
                         }
                         return { success: true, status: response.status };
@@ -403,11 +409,20 @@ function EventPage() {
     const handleConcludeEvent = async () => {
         if (!eventId) return;
         try {
+            let userId = localStorage.getItem('userId');
+            if (userId && (userId.startsWith('"') || userId.startsWith('{') || userId.startsWith('['))) {
+                try {
+                    userId = JSON.parse(userId);
+                } catch {
+                    // use as fallback
+                }
+            }
             const response = await fetch(
                 `https://milbantkar-1.onrender.com/api/events/${eventId}/conclude`,
                 {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ userId }) // Send userId in body as required
                 }
             );
             const data = await response.json();
@@ -419,6 +434,31 @@ function EventPage() {
             }
         } catch (err) {
             showNotification("Network error. Please try again.", "error");
+        }
+    };
+
+    // Download QR Code as PNG
+    const downloadQRCode = () => {
+        const svg = document.getElementById('event-qr-code');
+        if (svg) {
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                const pngFile = canvas.toDataURL('image/png');
+                const downloadLink = document.createElement('a');
+                downloadLink.download = `event-${event.code}-qrcode.png`;
+                downloadLink.href = pngFile;
+                downloadLink.click();
+            };
+            
+            img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+            showNotification('QR Code downloaded successfully!', 'success');
         }
     };
 
@@ -499,6 +539,13 @@ function EventPage() {
                     </div>
                     <div className="mobile-header-actions">
                         <button 
+                            className="mobile-action-btn qr-btn"
+                            onClick={() => setShowQRCode(true)}
+                            title="Show QR Code"
+                        >
+                            <i className="fas fa-qrcode"></i>
+                        </button>
+                        <button 
                             className="mobile-action-btn share-btn"
                             onClick={shareEvent}
                             title="Share Event"
@@ -514,6 +561,67 @@ function EventPage() {
                     </div>
                 </div>
             </div>
+
+            {/* QR Code Modal */}
+            {showQRCode && (
+                <div className="modal-overlay qr-modal-overlay" onClick={() => setShowQRCode(false)}>
+                    <div className="modal-content qr-modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header qr-modal-header">
+                            <h3>
+                                <i className="fas fa-qrcode"></i>
+                                Event QR Code
+                            </h3>
+                            <button 
+                                className="modal-close"
+                                onClick={() => setShowQRCode(false)}
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div className="modal-body qr-modal-body">
+                            <div className="qr-code-container">
+                                <div className="qr-code-card">
+                                    {/* Using react-qr-code */}
+                                    <QRCode
+                                        id="event-qr-code"
+                                        value={event.code}
+                                        size={300}
+                                        bgColor="#ffffff"
+                                        fgColor="#667eea"
+                                        level="H"
+                                        style={{ 
+                                            padding: '8px', 
+                                            backgroundColor: '#ffffff',
+                                            borderRadius: '8px'
+                                        }}
+                                    />
+                                    <div className="qr-code-info">
+                                        <h4 className="event-name">{event.name}</h4>
+                                        <p className="event-code-text">Code: <strong>{event.code}</strong></p>
+                                        <p className="qr-instruction">Scan this QR code to join the event</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="qr-actions">
+                                <button 
+                                    className="btn-download-qr"
+                                    onClick={downloadQRCode}
+                                >
+                                    <i className="fas fa-download"></i>
+                                    Download QR Code
+                                </button>
+                                <button 
+                                    className="btn-copy-code"
+                                    onClick={copyEventCode}
+                                >
+                                    <i className="fas fa-copy"></i>
+                                    Copy Event Code
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Enhanced Floating Action Menu */}
             {showFloatingMenu && (
@@ -549,6 +657,19 @@ function EventPage() {
                             <span>Settle Up</span>
                         </button>
 
+                        <button
+                            className="floating-menu-item info"
+                            onClick={() => {
+                                setShowQRCode(true);
+                                setShowFloatingMenu(false);
+                            }}
+                        >
+                            <div className="menu-item-icon">
+                                <i className="fas fa-qrcode"></i>
+                            </div>
+                            <span>Show QR Code</span>
+                        </button>
+
                         {!event.isClosed && userRole === 'creator' && (
                             <button
                                 className="floating-menu-item warning"
@@ -565,7 +686,7 @@ function EventPage() {
                         )}
 
                         <button
-                            className="floating-menu-item info"
+                            className="floating-menu-item secondary"
                             onClick={() => {
                                 shareEvent();
                                 setShowFloatingMenu(false);
@@ -587,16 +708,16 @@ function EventPage() {
                     <div className="event-header-content">
                         <div className="event-info">
                             <div className="event-meta">
-                                <div className="event-badge">
-                                    {event.isClosed ? (
-                                        <span className="badge-concluded">
-                                            <i className="fas fa-check-circle"></i> Concluded
-                                        </span>
-                                    ) : (
-                                        <span className="badge-active">
-                                            <i className="fas fa-clock"></i> Active
-                                        </span>
-                                    )}
+                            <div className="event-badge">
+                                {event.isClosed ? (
+                                    <span className="badge-concluded">
+                                        <i className="fas fa-check-circle"></i> Concluded
+                                    </span>
+                                ) : (
+                                    <span className="badge-active">
+                                        <i className="fas fa-clock"></i> Active
+                                    </span>
+                                )}
                                 </div>
                                 <div className="event-role-badge">
                                     <i className={`fas ${userRole === 'creator' ? 'fa-crown' : 'fa-user'}`}></i>
@@ -608,7 +729,7 @@ function EventPage() {
                             <div className="event-stats">
                                 <div className="stat-item">
                                     <div className="stat-icon">
-                                        <i className="fas fa-users"></i>
+                                    <i className="fas fa-users"></i>
                                     </div>
                                     <div className="stat-content">
                                         <div className="stat-value">{event.participants?.length || 0}</div>
@@ -617,7 +738,7 @@ function EventPage() {
                                 </div>
                                 <div className="stat-item">
                                     <div className="stat-icon">
-                                        <i className="fas fa-receipt"></i>
+                                    <i className="fas fa-receipt"></i>
                                     </div>
                                     <div className="stat-content">
                                         <div className="stat-value">{event.expenses?.length || 0}</div>
@@ -626,7 +747,7 @@ function EventPage() {
                                 </div>
                                 <div className="stat-item">
                                     <div className="stat-icon">
-                                        <i className="fas fa-rupee-sign"></i>
+                                    <i className="fas fa-rupee-sign"></i>
                                     </div>
                                     <div className="stat-content">
                                         <div className="stat-value">₹{getTotalExpenses().toFixed(2)}</div>
@@ -643,6 +764,13 @@ function EventPage() {
                             <div className="event-code">{event.code}</div>
                             <div className="code-hint">Share this code to invite others</div>
                             <div className="code-actions">
+                                <button 
+                                    className="btn-qr-code"
+                                    onClick={() => setShowQRCode(true)}
+                                >
+                                    <i className="fas fa-qrcode"></i>
+                                    Show QR
+                                </button>
                                 <button className="btn-copy-code" onClick={copyEventCode}>
                                     <i className="fas fa-copy"></i>
                                     Copy Code
@@ -679,25 +807,25 @@ function EventPage() {
                                     const isCurrentUser = String(participant._id) === String(getCurrentUserId());
                                     return (
                                         <div key={participant._id} className={`participant-item ${index === 0 ? 'admin' : ''} ${isCurrentUser ? 'current-user' : ''}`}>
-                                            <div className="participant-avatar">
-                                                <img
+                                        <div className="participant-avatar">
+                                            <img
                                                     src={participant.profilePic || `https://ui-avatars.com/api/?name=${participant.username}&background=667eea&color=fff&size=50`}
-                                                    alt={participant.username}
-                                                />
-                                                {index === 0 && <div className="admin-badge"><i className="fas fa-crown"></i></div>}
+                                                alt={participant.username}
+                                            />
+                                            {index === 0 && <div className="admin-badge"><i className="fas fa-crown"></i></div>}
                                                 {isCurrentUser && <div className="current-user-badge"><i className="fas fa-user"></i></div>}
-                                            </div>
-                                            <div className="participant-info">
+                                        </div>
+                                        <div className="participant-info">
                                                 <div className="participant-name">
                                                     {participant.username}
                                                     {isCurrentUser && <span className="you-badge">You</span>}
                                                 </div>
-                                                <div className="participant-email">{participant.email}</div>
+                                            <div className="participant-email">{participant.email}</div>
                                                 <div className={`participant-balance ${balance >= 0 ? 'positive' : 'negative'}`}>
                                                     <span className="balance-label">{balance >= 0 ? 'Owes you' : 'You owe'}</span>
                                                     <span className="balance-amount">₹{Math.abs(balance).toFixed(2)}</span>
-                                                </div>
-                                            </div>
+                                        </div>
+                                    </div>
                                         </div>
                                     );
                                 })}
@@ -742,6 +870,19 @@ function EventPage() {
                                     </div>
                                 </button>
 
+                                <button
+                                    className="btn-action btn-info"
+                                    onClick={() => setShowQRCode(true)}
+                                >
+                                    <div className="btn-icon">
+                                        <i className="fas fa-qrcode"></i>
+                                    </div>
+                                    <div className="btn-text">
+                                        <span>QR Code</span>
+                                        <small>Share event</small>
+                                    </div>
+                                </button>
+
                                 {!event.isClosed && userRole === 'creator' && (
                                     <button
                                         className="btn-action btn-warning"
@@ -749,7 +890,7 @@ function EventPage() {
                                     >
                                         <div className="btn-icon">
                                             <i className="fas fa-flag-checkered"></i>
-                                        </div>
+                            </div>
                                         <div className="btn-text">
                                             <span>Conclude Event</span>
                                             <small>Mark as closed</small>
@@ -960,14 +1101,14 @@ function EventPage() {
                                                     className="search-input"
                                                 />
                                                 {searchTerm && (
-                                                    <button 
+                                    <button 
                                                         className="clear-search"
                                                         onClick={() => setSearchTerm('')}
-                                                    >
-                                                        <i className="fas fa-times"></i>
-                                                    </button>
+                                    >
+                                        <i className="fas fa-times"></i>
+                                    </button>
                                                 )}
-                                            </div>
+                                </div>
                                             <div className="category-filter">
                                                 <select 
                                                     value={selectedCategory}
@@ -980,73 +1121,73 @@ function EventPage() {
                                                         </option>
                                                     ))}
                                                 </select>
-                                            </div>
-                                            <span className="total-amount">Total: ₹{getTotalExpenses().toFixed(2)}</span>
-                                        </div>
                                     </div>
-                                    
+                                    <span className="total-amount">Total: ₹{getTotalExpenses().toFixed(2)}</span>
+                                </div>
+                            </div>
+                            
                                     {displayExpenses.length > 0 ? (
-                                        <div className="expenses-list">
+                                <div className="expenses-list">
                                             {displayExpenses
-                                                .sort((a, b) => new Date(b.date) - new Date(a.date))
-                                                .map((expense, index) => (
+                                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                                        .map((expense, index) => (
                                                 <div 
                                                     key={expense._id} 
                                                     className={`expense-item ${index === 0 ? 'latest' : ''}`}
                                                     onClick={() => setShowExpenseDetails(expense)}
                                                 >
-                                                    <div className="expense-users">
-                                                        <div className="expense-from">
-                                                            <img
-                                                                src={expense.paidBy?.profilePic || `https://ui-avatars.com/api/?name=${expense.paidBy?.username}&background=28a745&color=fff&size=45`}
-                                                                alt={expense.paidBy?.username}
-                                                            />
-                                                            <div className="user-details">
-                                                                <div className="user-name">{expense.paidBy?.username}</div>
-                                                                <div className="user-role">paid</div>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="expense-arrow">
-                                                            <i className="fas fa-arrow-right"></i>
-                                                        </div>
-                                                        
-                                                        <div className="expense-to">
-                                                            <img
-                                                                src={expense.paidTo?.profilePic || `https://ui-avatars.com/api/?name=${expense.paidTo?.username}&background=dc3545&color=fff&size=45`}
-                                                                alt={expense.paidTo?.username}
-                                                            />
-                                                            <div className="user-details">
-                                                                <div className="user-name">{expense.paidTo?.username}</div>
-                                                                <div className="user-role">received</div>
-                                                            </div>
-                                                        </div>
+                                            <div className="expense-users">
+                                                <div className="expense-from">
+                                                    <img
+                                                        src={expense.paidBy?.profilePic || `https://ui-avatars.com/api/?name=${expense.paidBy?.username}&background=28a745&color=fff&size=45`}
+                                                        alt={expense.paidBy?.username}
+                                                    />
+                                                    <div className="user-details">
+                                                        <div className="user-name">{expense.paidBy?.username}</div>
+                                                        <div className="user-role">paid</div>
                                                     </div>
-                                                    
-                                                    <div className="expense-details">
-                                                        <div className="expense-amount">₹{expense.amount?.toFixed(2)}</div>
-                                                        <div className="expense-description">{expense.description || 'No description'}</div>
-                                                        <div className="expense-meta">
-                                                            <span className="expense-date">
-                                                                <i className="fas fa-calendar"></i>
-                                                                {new Date(expense.date).toLocaleDateString()}
-                                                            </span>
-                                                            <span className={`expense-status ${expense.status ? 'settled' : 'pending'}`}>
-                                                                <i className={`fas ${expense.status ? 'fa-check-circle' : 'fa-clock'}`}></i>
-                                                                {expense.status ? 'Settled' : 'Pending'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    {index === 0 && <div className="latest-indicator">Latest</div>}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="empty-expenses">
-                                            <div className="empty-icon">
-                                                <i className="fas fa-receipt"></i>
+                                                
+                                                <div className="expense-arrow">
+                                                    <i className="fas fa-arrow-right"></i>
+                                                </div>
+                                                
+                                                <div className="expense-to">
+                                                    <img
+                                                        src={expense.paidTo?.profilePic || `https://ui-avatars.com/api/?name=${expense.paidTo?.username}&background=dc3545&color=fff&size=45`}
+                                                        alt={expense.paidTo?.username}
+                                                    />
+                                                    <div className="user-details">
+                                                        <div className="user-name">{expense.paidTo?.username}</div>
+                                                        <div className="user-role">received</div>
+                                                    </div>
+                                                </div>
                                             </div>
+                                            
+                                            <div className="expense-details">
+                                                <div className="expense-amount">₹{expense.amount?.toFixed(2)}</div>
+                                                <div className="expense-description">{expense.description || 'No description'}</div>
+                                                <div className="expense-meta">
+                                                    <span className="expense-date">
+                                                        <i className="fas fa-calendar"></i>
+                                                        {new Date(expense.date).toLocaleDateString()}
+                                                    </span>
+                                                    <span className={`expense-status ${expense.status ? 'settled' : 'pending'}`}>
+                                                        <i className={`fas ${expense.status ? 'fa-check-circle' : 'fa-clock'}`}></i>
+                                                        {expense.status ? 'Settled' : 'Pending'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            
+                                            {index === 0 && <div className="latest-indicator">Latest</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="empty-expenses">
+                                    <div className="empty-icon">
+                                        <i className="fas fa-receipt"></i>
+                                    </div>
                                             <h4>No expenses found</h4>
                                             <p>
                                                 {searchTerm || selectedCategory !== 'all' 
@@ -1054,20 +1195,20 @@ function EventPage() {
                                                     : 'Start by adding your first expense to track shared costs'
                                                 }
                                             </p>
-                                            <button
-                                                className="btn-empty-action"
+                                    <button
+                                        className="btn-empty-action"
                                                 onClick={() => {
                                                     setShowAddExpense(true);
                                                     setSearchTerm('');
                                                     setSelectedCategory('all');
                                                 }}
-                                            >
-                                                <i className="fas fa-plus"></i>
-                                                Add First Expense
-                                            </button>
-                                        </div>
-                                    )}
+                                    >
+                                        <i className="fas fa-plus"></i>
+                                        Add First Expense
+                                    </button>
                                 </div>
+                            )}
+                        </div>
                             )}
 
                             {/* Enhanced Settlements Tab */}
@@ -1089,8 +1230,8 @@ function EventPage() {
                                             >
                                                 <i className="fas fa-times"></i>
                                             </button>
-                                        </div>
-                                    </div>
+                    </div>
+                </div>
                                     
                                     <div className="settlement-content">
                                         <div className="settlement-info">
@@ -1101,7 +1242,7 @@ function EventPage() {
                                             <p className="settlement-description">
                                                 Follow this plan to settle all debts with minimum transactions
                                             </p>
-                                        </div>
+            </div>
                                         
                                         <div className="settlements-list">
                                             {settlements.map((settlement, index) => (

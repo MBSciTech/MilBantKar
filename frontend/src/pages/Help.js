@@ -66,6 +66,31 @@ function Help() {
       ]
     },
     {
+      id: 'profile',
+      title: 'Profile & Account',
+      icon: '🙍‍♂️',
+      questions: [
+        {
+          q: 'How do I update or edit my profile?',
+          a: (
+            <ol style={{ paddingLeft: '1.25rem', margin: 0 }}>
+              <li><b>Go to Profile:</b> Click your profile or avatar in the top right, then select <b>My Profile</b>.</li>
+              <li><b>View & Edit:</b> Edit your username, email, phone, and profile picture directly in the form fields shown.</li>
+              <li><b>Change Picture:</b> Click your current profile photo and select a new JPG or PNG image. Preview will update instantly.</li>
+              <li><b>Save Changes:</b> Click <b>Save</b> or <b>Update Profile</b> at the bottom. Wait for the success message.</li>
+              <li><b>Done:</b> Your updated info and image will reflect everywhere in the app immediately after saving.</li>
+              <li><b>Notes:</b>
+                <ul style={{ paddingLeft: '1.25rem', margin: 0 }}>
+                  <li>Large images will be compressed automatically – if upload fails, choose a smaller file.</li>
+                  <li>If any field is invalid or taken, you’ll see a helpful error.</li>
+                </ul>
+              </li>
+            </ol>
+          )
+        }
+      ]
+    },
+    {
       id: 'troubleshooting',
       title: 'Troubleshooting',
       icon: '🔧',
