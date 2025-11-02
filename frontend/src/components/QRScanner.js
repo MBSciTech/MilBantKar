@@ -14,6 +14,8 @@ function QRScanner() {
     const [cameraPermission, setCameraPermission] = useState(null);
     const scannerRef = useRef(null);
     const html5QrcodeScannerRef = useRef(null);
+    const isMountedRef = useRef(true);
+    const isStartingRef = useRef(false);
     const navigate = useNavigate();
 
     // Get userId from localStorage
@@ -38,31 +40,95 @@ function QRScanner() {
         }
     };
 
-    // Check camera permissions
-    useEffect(() => {
-        checkCameraPermission();
-    }, []);
-
-    const checkCameraPermission = async () => {
+    // Request camera permission manually
+    const requestCameraPermission = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             stream.getTracks().forEach(track => track.stop());
             setCameraPermission('granted');
+            setError('');
+            // Reset scanning state to trigger scanner initialization
+            setScanning(false);
+            setTimeout(() => {
+                setScanning(true);
+            }, 100);
         } catch (err) {
             console.error('Camera permission denied:', err);
             setCameraPermission('denied');
-            setError('Camera access is required to scan QR codes. Please allow camera permissions.');
+            if (err.name === 'NotAllowedError') {
+                setError('Camera access denied. Please enable camera permissions in your browser settings and refresh.');
+            } else if (err.name === 'NotFoundError') {
+                setError('No camera found on this device.');
+            } else {
+                setError('Failed to access camera. Please check your browser settings.');
+            }
         }
     };
 
-    // Initialize QR Scanner
+    // Cleanup on unmount and add global error handler
     useEffect(() => {
-        if (cameraPermission === 'granted' && scanning && !result && !loading && !html5QrcodeScannerRef.current) {
+        isMountedRef.current = true;
+        
+        // Handle unhandled promise rejections for play() interruption errors
+        const handleUnhandledRejection = (event) => {
+            const error = event.reason;
+            if (
+                error?.name === 'AbortError' ||
+                error?.message?.includes('play()') ||
+                error?.message?.includes('interrupted') ||
+                error?.message?.includes('media was removed')
+            ) {
+                // Suppress these harmless cleanup errors
+                event.preventDefault();
+                return;
+            }
+        };
+
+        window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+        return () => {
+            isMountedRef.current = false;
+            isStartingRef.current = false;
+            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+            
+            // Clean up scanner on unmount
+            if (html5QrcodeScannerRef.current) {
+                html5QrcodeScannerRef.current.stop().catch((err) => {
+                    // Suppress AbortError and play() interruption errors
+                    if (
+                        err.name !== 'AbortError' &&
+                        !err.message?.includes('play()') &&
+                        !err.message?.includes('interrupted') &&
+                        !err.message?.includes('media was removed')
+                    ) {
+                        console.error('Unmount cleanup error:', err);
+                    }
+                }).finally(() => {
+                    html5QrcodeScannerRef.current = null;
+                });
+            }
+        };
+    }, []);
+
+    // Initialize QR Scanner - try to start directly
+    useEffect(() => {
+        if (scanning && !result && !loading && !html5QrcodeScannerRef.current && cameraPermission !== 'denied' && !isStartingRef.current) {
             const elementId = "qr-reader";
             
             const startScanning = async () => {
+                // Check if element exists
+                const element = document.getElementById(elementId);
+                if (!element || !isMountedRef.current) {
+                    return;
+                }
+
+                isStartingRef.current = true;
+                
                 try {
                     const html5Qrcode = new Html5Qrcode(elementId);
+                    
+                    // Calculate responsive QR box size
+                    const qrboxSize = Math.min(300, window.innerWidth * 0.8);
                     
                     await html5Qrcode.start(
                         {
@@ -70,45 +136,119 @@ function QRScanner() {
                         },
                         {
                             fps: 10,
-                            qrbox: { width: 300, height: 300 }
+                            qrbox: { width: qrboxSize, height: qrboxSize }
                         },
                         (decodedText) => {
-                            // Success callback
-                            if (decodedText && scanning) {
+                            // Success callback - check if still mounted
+                            if (decodedText && scanning && isMountedRef.current) {
                                 handleScan(decodedText);
                             }
                         },
                         (errorMessage) => {
-                            // Error callback - ignore, it's just scanning
+                            // Error callback - ignore scanning errors
+                            // Suppress play() interruption errors
+                            if (errorMessage && !errorMessage.includes('play()') && !errorMessage.includes('interrupted')) {
+                                // Only log non-play errors
+                            }
                         }
                     );
 
-                    html5QrcodeScannerRef.current = html5Qrcode;
-                } catch (err) {
-                    console.error('Error initializing QR scanner:', err);
-                    if (err.name !== 'NotFoundException') {
-                        setError('Failed to initialize camera. Please try again.');
+                    // Only set ref if still mounted
+                    if (isMountedRef.current) {
+                        html5QrcodeScannerRef.current = html5Qrcode;
+                        setCameraPermission('granted');
+                        setError('');
+                    } else {
+                        // Clean up if unmounted during start
+                        html5Qrcode.stop().catch(() => {});
                     }
+                } catch (err) {
+                    // Suppress play() interruption errors and AbortError
+                    if (
+                        err.name === 'AbortError' ||
+                        err.message?.includes('play()') || 
+                        err.message?.includes('interrupted') ||
+                        err.message?.includes('media was removed')
+                    ) {
+                        // This is a harmless cleanup race condition
+                        isStartingRef.current = false;
+                        return;
+                    }
+                    
+                    if (!isMountedRef.current) {
+                        isStartingRef.current = false;
+                        return;
+                    }
+                    
+                    console.error('Error initializing QR scanner:', err);
+                    html5QrcodeScannerRef.current = null;
+                    
+                    if (err.name === 'NotAllowedError' || err.message?.includes('Permission denied')) {
+                        setCameraPermission('denied');
+                        setError('Camera access denied. Please allow camera permissions to scan QR codes.');
+                    } else if (err.name === 'NotFoundError' || err.message?.includes('No camera')) {
+                        setCameraPermission('denied');
+                        setError('No camera found on this device.');
+                    } else {
+                        // Don't set permission to denied for other errors - might be temporary
+                        setError('Failed to start camera. Click "Allow Camera" to try again.');
+                        setCameraPermission(null);
+                    }
+                } finally {
+                    isStartingRef.current = false;
                 }
             };
 
-            startScanning();
+            // Small delay to ensure DOM is ready
+            const timeoutId = setTimeout(() => {
+                if (isMountedRef.current) {
+                    startScanning();
+                }
+            }, 100);
+
+            return () => {
+                clearTimeout(timeoutId);
+                isStartingRef.current = false;
+                if (html5QrcodeScannerRef.current) {
+                    const scanner = html5QrcodeScannerRef.current;
+                    html5QrcodeScannerRef.current = null;
+                    scanner.stop().catch((err) => {
+                        // Suppress AbortError and play() interruption errors
+                        if (
+                            err.name !== 'AbortError' &&
+                            !err.message?.includes('play()') &&
+                            !err.message?.includes('interrupted') &&
+                            !err.message?.includes('media was removed')
+                        ) {
+                            console.error('Cleanup error:', err);
+                        }
+                    });
+                }
+            };
         }
 
-        // Cleanup function
+        // Cleanup when conditions change
         return () => {
-            if (html5QrcodeScannerRef.current) {
-                html5QrcodeScannerRef.current.stop().catch(err => {
-                    console.error('Error stopping scanner:', err);
-                }).finally(() => {
-                    html5QrcodeScannerRef.current = null;
+            if (html5QrcodeScannerRef.current && (!scanning || result || loading)) {
+                const scanner = html5QrcodeScannerRef.current;
+                html5QrcodeScannerRef.current = null;
+                scanner.stop().catch((err) => {
+                    // Suppress AbortError and play() interruption errors
+                    if (
+                        err.name !== 'AbortError' &&
+                        !err.message?.includes('play()') &&
+                        !err.message?.includes('interrupted') &&
+                        !err.message?.includes('media was removed')
+                    ) {
+                        console.error('Cleanup error:', err);
+                    }
                 });
             }
         };
-    }, [cameraPermission, scanning, result, loading]);
+    }, [scanning, result, loading, cameraPermission]);
 
     const handleScan = async (content) => {
-        if (!content || !scanning) return;
+        if (!content || !scanning || !isMountedRef.current) return;
         
         const trimmedContent = content.trim();
         console.log('📱 Scanned QR code:', trimmedContent);
@@ -122,17 +262,28 @@ function QRScanner() {
         setScanning(false);
         setResult(trimmedContent);
         
-        // Stop scanner
+        // Stop scanner safely
         if (html5QrcodeScannerRef.current) {
             try {
-                await html5QrcodeScannerRef.current.stop();
+                const scanner = html5QrcodeScannerRef.current;
                 html5QrcodeScannerRef.current = null;
+                await scanner.stop();
             } catch (err) {
-                console.error('Error stopping scanner:', err);
+                // Suppress play() interruption errors and AbortError during cleanup
+                if (
+                    err.name !== 'AbortError' &&
+                    !err.message?.includes('play()') && 
+                    !err.message?.includes('interrupted') &&
+                    !err.message?.includes('media was removed')
+                ) {
+                    console.error('Error stopping scanner:', err);
+                }
             }
         }
         
-        await joinEvent(trimmedContent);
+        if (isMountedRef.current) {
+            await joinEvent(trimmedContent);
+        }
     };
 
     const joinEvent = async (eventCode) => {
@@ -192,19 +343,31 @@ function QRScanner() {
     };
 
     const restartScanning = async () => {
-        // Stop existing scanner
+        // Stop existing scanner safely
         if (html5QrcodeScannerRef.current) {
             try {
-                await html5QrcodeScannerRef.current.stop();
+                const scanner = html5QrcodeScannerRef.current;
                 html5QrcodeScannerRef.current = null;
+                await scanner.stop();
             } catch (err) {
-                console.error('Error stopping scanner:', err);
+                // Suppress play() interruption errors and AbortError during cleanup
+                if (
+                    err.name !== 'AbortError' &&
+                    !err.message?.includes('play()') && 
+                    !err.message?.includes('interrupted') &&
+                    !err.message?.includes('media was removed')
+                ) {
+                    console.error('Error stopping scanner:', err);
+                }
             }
         }
         
+        // Reset states to allow retry
         setScanning(true);
         setResult(null);
         setError('');
+        setCameraPermission(null); // Reset permission state to allow retry
+        isStartingRef.current = false;
     };
 
     const handleManualCode = () => {
@@ -238,29 +401,49 @@ function QRScanner() {
                             <i className="fas fa-video-slash"></i>
                         </div>
                         <h3>Camera Access Required</h3>
-                        <p>Please allow camera permissions to scan QR codes.</p>
-                        <button 
-                            className="btn-permission"
-                            onClick={() => window.location.reload()}
-                        >
-                            <i className="fas fa-sync"></i>
-                            Retry
-                        </button>
+                        <p>{error || 'Please allow camera permissions to scan QR codes.'}</p>
+                        <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column', width: '100%', maxWidth: '300px', margin: '0 auto' }}>
+                            <button 
+                                className="btn-permission"
+                                onClick={requestCameraPermission}
+                            >
+                                <i className="fas fa-camera"></i>
+                                Allow Camera
+                            </button>
+                            <button 
+                                className="btn-permission"
+                                onClick={() => window.location.reload()}
+                                style={{ background: 'rgba(255, 255, 255, 0.1)' }}
+                            >
+                                <i className="fas fa-sync"></i>
+                                Refresh Page
+                            </button>
+                        </div>
                     </div>
-                ) : error && !loading ? (
+                ) : error && !loading && cameraPermission !== 'granted' ? (
                     <div className="scanner-error">
                         <div className="error-icon">
                             <i className="fas fa-exclamation-triangle"></i>
                         </div>
-                        <h3>Scanning Error</h3>
+                        <h3>Camera Error</h3>
                         <p>{error}</p>
-                        <button 
-                            className="btn-retry"
-                            onClick={restartScanning}
-                        >
-                            <i className="fas fa-redo"></i>
-                            Try Again
-                        </button>
+                        <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column', width: '100%', maxWidth: '300px', margin: '0 auto' }}>
+                            <button 
+                                className="btn-retry"
+                                onClick={requestCameraPermission}
+                            >
+                                <i className="fas fa-camera"></i>
+                                Allow Camera
+                            </button>
+                            <button 
+                                className="btn-retry"
+                                onClick={restartScanning}
+                                style={{ background: 'rgba(255, 255, 255, 0.1)' }}
+                            >
+                                <i className="fas fa-redo"></i>
+                                Try Again
+                            </button>
+                        </div>
                     </div>
                 ) : loading ? (
                     <div className="scanner-loading">
