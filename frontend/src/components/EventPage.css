@@ -73,6 +73,11 @@
         flex: 0 0 100%;
         max-width: 100%;
     }
+    
+    /* Hide mobile participants card on desktop - sidebar shows participants */
+    .mobile-participants-card {
+        display: none !important;
+    }
 }
 
 @media (min-width: 992px) {
@@ -2014,6 +2019,10 @@
     .main-content-area {
         padding-left: 0;
         padding-right: 0;
+    }
+    
+    .mobile-participants-card {
+        display: block;
     }
     
     .event-stats {

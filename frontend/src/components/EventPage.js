@@ -1211,6 +1211,63 @@ function EventPage() {
                         </div>
                             )}
 
+                            {/* Enhanced Participants Tab - Mobile View */}
+                            {activeTab === 'participants' && (
+                                <div className="card-modern participants-card mobile-participants-card">
+                                    <div className="card-header-modern">
+                                        <h5>
+                                            <i className="fas fa-users"></i>
+                                            Participants
+                                            <span className="participant-count">{event.participants?.length || 0}</span>
+                                        </h5>
+                                        <button className="btn-invite" onClick={shareEvent}>
+                                            <i className="fas fa-user-plus"></i>
+                                            Invite
+                                        </button>
+                                    </div>
+                                    <div className="participants-list">
+                                        {event.participants && event.participants.length > 0 ? (
+                                            event.participants.map((participant, index) => {
+                                                const balance = getParticipantBalance(participant._id);
+                                                const isCurrentUser = String(participant._id) === String(getCurrentUserId());
+                                                return (
+                                                    <div key={participant._id} className={`participant-item ${index === 0 ? 'admin' : ''} ${isCurrentUser ? 'current-user' : ''}`}>
+                                                        <div className="participant-avatar">
+                                                            <img
+                                                                src={participant.profilePic || `https://ui-avatars.com/api/?name=${participant.username}&background=667eea&color=fff&size=50`}
+                                                                alt={participant.username}
+                                                            />
+                                                            {index === 0 && <div className="admin-badge"><i className="fas fa-crown"></i></div>}
+                                                            {isCurrentUser && <div className="current-user-badge"><i className="fas fa-user"></i></div>}
+                                                        </div>
+                                                        <div className="participant-info">
+                                                            <div className="participant-name">
+                                                                {participant.username}
+                                                                {isCurrentUser && <span className="you-badge">You</span>}
+                                                            </div>
+                                                            <div className="participant-email">{participant.email}</div>
+                                                            <div className={`participant-balance ${balance >= 0 ? 'positive' : 'negative'}`}>
+                                                                <span className="balance-label">{balance >= 0 ? 'Owes you' : 'You owe'}</span>
+                                                                <span className="balance-amount">₹{Math.abs(balance).toFixed(2)}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <div className="empty-state">
+                                                <i className="fas fa-users"></i>
+                                                <p>No participants yet</p>
+                                                <button className="btn-invite" onClick={shareEvent}>
+                                                    <i className="fas fa-user-plus"></i>
+                                                    Invite People
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Enhanced Settlements Tab */}
                             {(activeTab === 'settlements' || (showSettlement && window.innerWidth >= 768)) && settlements.length > 0 && (
                                 <div className="card-modern settlement-card">
