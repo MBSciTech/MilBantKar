@@ -134,7 +134,11 @@ function Navbar() {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.removeItem('username');
     }
-    console.log('Logging out...');
+    setIsMobileMenuOpen(false);
+    setIsProfileOpen(false);
+    if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
   };
 
   const toggleMobileMenu = () => {
@@ -581,6 +585,8 @@ function Navbar() {
       right: -100%;
       width: 320px;
       height: 100vh;
+      height: 100dvh;
+      max-height: -webkit-fill-available;
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
@@ -589,7 +595,7 @@ function Navbar() {
       z-index: 1003;
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
+      overflow: hidden;
     }
 
     .mobile-menu.open {
@@ -597,6 +603,7 @@ function Navbar() {
     }
 
     .mobile-menu-header {
+      flex-shrink: 0;
       padding: 2rem 1.5rem 1rem;
       border-bottom: 1px solid rgba(0, 0, 0, 0.1);
       display: flex;
@@ -617,8 +624,19 @@ function Navbar() {
       background: rgba(0, 0, 0, 0.15);
     }
 
+    .mobile-menu-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      flex-direction: column;
+    }
+
     .mobile-nav-links {
       padding: 1rem 0;
+      flex-shrink: 0;
     }
 
     .mobile-nav-item {
@@ -645,10 +663,35 @@ function Navbar() {
       border-left-color: #667eea;
     }
 
+    .mobile-nav-item.mobile-nav-signout {
+      color: #dc2626;
+      border-left-color: #dc2626;
+    }
+
+    .mobile-nav-item.mobile-nav-signout:hover {
+      background: rgba(220, 38, 38, 0.1);
+      color: #dc2626;
+      border-left-color: #dc2626;
+    }
+
     .mobile-menu-footer {
-      margin-top: auto;
-      padding: 1.5rem;
+      padding: 1.5rem 0;
+      padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
       border-top: 1px solid rgba(0, 0, 0, 0.1);
+      flex-shrink: 0;
+    }
+
+    .mobile-menu-footer .mobile-add-expense {
+      margin-left: 1.5rem;
+      margin-right: 1.5rem;
+      width: calc(100% - 3rem);
+      box-sizing: border-box;
+    }
+
+    .mobile-menu-footer-divider {
+      height: 1px;
+      background: rgba(0, 0, 0, 0.1);
+      margin: 0.5rem 0;
     }
 
     .mobile-add-expense {
@@ -657,7 +700,7 @@ function Navbar() {
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
-      padding: 1rem;
+      padding: 1rem 1.5rem;
       background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
       color: white;
       text-decoration: none;
@@ -665,6 +708,7 @@ function Navbar() {
       font-weight: 600;
       margin-bottom: 1rem;
       transition: all 0.3s ease;
+      box-sizing: border-box;
     }
 
     .mobile-add-expense:hover {
@@ -707,6 +751,10 @@ function Navbar() {
       }
 
       .add-expense-btn {
+        display: none;
+      }
+
+      .profile-dropdown {
         display: none;
       }
     }
@@ -846,11 +894,10 @@ function Navbar() {
       <nav className="modern-navbar">
         <div className="navbar-content">
           {/* Brand Logo */}
-          <a href="/" className="navbar-brand" onClick={(e) => { e.preventDefault(); handleLinkClick('/'); }} style={{color:((getPath()=='login') || (getPath()=='signup') || (getPath()=='history'))?'black':'white'}}>
+          <a href="/dashboard" className="navbar-brand" onClick={(e) => { e.preventDefault(); handleLinkClick('/dashboard'); }} style={{color:((getPath()=='login') || (getPath()=='signup') || (getPath()=='history'))?'black':'white'}}>
             <div className="brand-icon">
               <Wallet size={20} color="white" />
             </div>
-            {console.log(getPath())}
             Mil Bant Kar
           </a>
 
@@ -1000,8 +1047,8 @@ function Navbar() {
               </div>
             </div>
 
-            {/* Profile */}
-            <div className="dropdown" ref={profileRef}>
+            {/* Profile - hidden on mobile; use hamburger menu instead */}
+            <div className="dropdown profile-dropdown" ref={profileRef}>
               <button 
                 style={{ background: 'none', border: 'none', padding: 0 }}
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -1107,53 +1154,55 @@ function Navbar() {
           </button>
         </div>
 
-        <div className="mobile-nav-links">
-          {navigationItems.map((item) => (
-            <a 
-              key={item.path}
-              href={item.path}
-              className={`mobile-nav-item ${item.active ? 'active' : ''}`}
-              onClick={(e) => { e.preventDefault(); handleLinkClick(item.path); }}
-            >
-              <item.icon size={20} />
-              {item.label}
-            </a>
-          ))}
-        </div>
+        <div className="mobile-menu-body">
+          <div className="mobile-nav-links">
+            {navigationItems.map((item) => (
+              <a 
+                key={item.path}
+                href={item.path}
+                className={`mobile-nav-item ${item.active ? 'active' : ''}`}
+                onClick={(e) => { e.preventDefault(); handleLinkClick(item.path); }}
+              >
+                <item.icon size={20} />
+                {item.label}
+              </a>
+            ))}
+          </div>
 
-        <div className="mobile-menu-footer">
-          <a 
-            href="/transaction" 
-            className="mobile-add-expense"
-            onClick={(e) => { e.preventDefault(); handleLinkClick('/transaction'); }}
-          >
-            <Plus size={20} />
-            Add Expense
-          </a>
-          
-          <a href="/profile" className="dropdown-item" onClick={(e) => { e.preventDefault(); handleLinkClick('/profile'); }}>
-            <User size={18} />
-            My Profile
-          </a>
-          <a href="/settings" className="dropdown-item" onClick={(e) => { e.preventDefault(); handleLinkClick('/settings'); }}>
-            <Settings size={18} />
-            Settings
-          </a>
-          <a href="/help" className="dropdown-item" onClick={(e) => { e.preventDefault(); handleLinkClick('/help'); }}>
-            <HelpCircle size={18} />
-            Help & Support
-          </a>
-          {user.isAdmin && (
-            <a href="/admin" className="dropdown-item" onClick={(e) => { e.preventDefault(); handleLinkClick('/admin'); }}>
-              <Shield size={18} />
-              Admin Panel
+          <div className="mobile-menu-footer">
+            <a 
+              href="/transaction" 
+              className="mobile-add-expense"
+              onClick={(e) => { e.preventDefault(); handleLinkClick('/transaction'); }}
+            >
+              <Plus size={20} />
+              Add Expense
             </a>
-          )}
-          <div style={{ height: '1px', background: 'rgba(0,0,0,0.1)', margin: '0.5rem 0' }}></div>
-          <a href="/" className="dropdown-item danger" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
-            <LogOut size={18} />
-            Sign Out
-          </a>
+            
+            <a href="/profile" className="mobile-nav-item" onClick={(e) => { e.preventDefault(); handleLinkClick('/profile'); }}>
+              <User size={20} />
+              My Profile
+            </a>
+            <a href="/settings" className="mobile-nav-item" onClick={(e) => { e.preventDefault(); handleLinkClick('/settings'); }}>
+              <Settings size={20} />
+              Settings
+            </a>
+            <a href="/help" className="mobile-nav-item" onClick={(e) => { e.preventDefault(); handleLinkClick('/help'); }}>
+              <HelpCircle size={20} />
+              Help & Support
+            </a>
+            {user.isAdmin && (
+              <a href="/admin" className="mobile-nav-item" onClick={(e) => { e.preventDefault(); handleLinkClick('/admin'); }}>
+                <Shield size={20} />
+                Admin Panel
+              </a>
+            )}
+            <div className="mobile-menu-footer-divider" />
+            <a href="/logout" className="mobile-nav-item mobile-nav-signout" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
+              <LogOut size={20} />
+              Sign Out
+            </a>
+          </div>
         </div>
       </div>
 
