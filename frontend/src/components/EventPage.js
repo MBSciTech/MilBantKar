@@ -308,8 +308,10 @@ function EventPage() {
 
         setProcessingSettlement(true);
 
+        // Calculate balances for each participant (same logic as getParticipantBalance)
         const balances = {};
         
+        // Initialize all participants with 0 balance
         event.participants.forEach(participant => {
             balances[participant._id] = {
                 name: participant.username,
@@ -317,48 +319,74 @@ function EventPage() {
             };
         });
 
+        // Calculate net balance for each participant (same logic as getParticipantBalance)
+        // If someone paid (paidBy), their balance increases (they should receive money)
+        // If someone received (paidTo), their balance decreases (they owe money)
         event.expenses.forEach(expense => {
-            const paidById = expense.paidBy._id;
-            const paidToId = expense.paidTo._id;
-            const amount = expense.amount;
+            const paidById = expense.paidBy?._id || expense.paidBy;
+            const paidToId = expense.paidTo?._id || expense.paidTo;
+            const amount = parseFloat(expense.amount) || 0;
 
-            if (balances[paidById] && balances[paidToId]) {
+            // Only process if both IDs are valid
+            if (paidById && paidToId && balances[paidById] && balances[paidToId]) {
                 balances[paidById].balance += amount;
                 balances[paidToId].balance -= amount;
             }
         });
 
+        // Separate into creditors (positive balance) and debtors (negative balance)
         const creditors = [];
         const debtors = [];
 
         Object.entries(balances).forEach(([userId, data]) => {
-            if (data.balance > 0.01) {
-                creditors.push({ id: userId, name: data.name, amount: data.balance });
-            } else if (data.balance < -0.01) {
-                debtors.push({ id: userId, name: data.name, amount: Math.abs(data.balance) });
+            // Round to 2 decimal places to avoid floating point errors
+            const roundedBalance = Math.round(data.balance * 100) / 100;
+            if (roundedBalance > 0.01) {
+                creditors.push({ id: userId, name: data.name, amount: roundedBalance });
+            } else if (roundedBalance < -0.01) {
+                debtors.push({ id: userId, name: data.name, amount: Math.abs(roundedBalance) });
             }
         });
 
-        const transactions = [];
-        let i = 0, j = 0;
+        // Sort creditors and debtors by amount (largest first) for optimal matching
+        creditors.sort((a, b) => b.amount - a.amount);
+        debtors.sort((a, b) => b.amount - a.amount);
 
-        while (i < creditors.length && j < debtors.length) {
-            const creditor = creditors[i];
-            const debtor = debtors[j];
+        // Greedy algorithm: match largest debtor with largest creditor
+        const transactions = [];
+        let creditorIndex = 0;
+        let debtorIndex = 0;
+
+        while (creditorIndex < creditors.length && debtorIndex < debtors.length) {
+            const creditor = creditors[creditorIndex];
+            const debtor = debtors[debtorIndex];
+
+            if (creditor.amount < 0.01) {
+                creditorIndex++;
+                continue;
+            }
+            
+            if (debtor.amount < 0.01) {
+                debtorIndex++;
+                continue;
+            }
 
             const minAmount = Math.min(creditor.amount, debtor.amount);
+            const roundedAmount = Math.round(minAmount * 100) / 100;
             
             transactions.push({
                 from: debtor.name,
                 to: creditor.name,
-                amount: Math.round(minAmount * 100) / 100
+                amount: roundedAmount
             });
 
-            creditor.amount -= minAmount;
-            debtor.amount -= minAmount;
+            creditor.amount -= roundedAmount;
+            debtor.amount -= roundedAmount;
+            creditor.amount = Math.round(creditor.amount * 100) / 100;
+            debtor.amount = Math.round(debtor.amount * 100) / 100;
 
-            if (creditor.amount < 0.01) i++;
-            if (debtor.amount < 0.01) j++;
+            if (creditor.amount < 0.01) creditorIndex++;
+            if (debtor.amount < 0.01) debtorIndex++;
         }
 
         setSettlements(transactions);
