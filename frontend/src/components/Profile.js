@@ -10,11 +10,7 @@ const Profile = ({ username }) => {
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    fetchUserProfile();
-  }, [username]);
-
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = React.useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`https://milbantkar-1.onrender.com/api/user/${username}`);
@@ -35,8 +31,14 @@ const Profile = ({ username }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [username]);
 
+  useEffect(() => {
+    const load = async () => {
+      await fetchUserProfile();
+    };
+    load();
+  }, [username, fetchUserProfile]);
   const handleEditToggle = () => {
     setEditing(!editing);
     if (!editing) {

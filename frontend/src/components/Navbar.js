@@ -10,7 +10,6 @@ import {
   LogOut, 
   Shield,
   Calendar,
-  Target,
   TrendingUp,
   FileText,
   Home,
@@ -20,9 +19,6 @@ import {
   AlertTriangle,
   Info,
   Vote,
-  Trash2,
-  Eye,
-  MessageSquare,
   CreditCard
 } from 'lucide-react';
 
@@ -178,19 +174,7 @@ function Navbar() {
     }
   };
 
-  const deleteAlert = async (alertId) => {
-    try {
-      await fetch(`https://milbantkar-1.onrender.com/api/alerts/${alertId}`, {
-        method: 'DELETE'
-      });
-      
-      setAlerts(prev => prev.filter(alert => alert._id !== alertId));
-      setIsModalOpen(false);
-      setSelectedAlert(null);
-    } catch (error) {
-      console.error('Error deleting alert:', error);
-    }
-  };
+
 
   const voteInPoll = async (alertId, optionIndex) => {
     if (!currentUser) return;
@@ -894,7 +878,7 @@ function Navbar() {
       <nav className="modern-navbar">
         <div className="navbar-content">
           {/* Brand Logo */}
-          <a href="/dashboard" className="navbar-brand" onClick={(e) => { e.preventDefault(); handleLinkClick('/dashboard'); }} style={{color:((getPath()=='login') || (getPath()=='signup') || (getPath()=='history'))?'black':'white'}}>
+          <a href="/dashboard" className="navbar-brand" onClick={(e) => { e.preventDefault(); handleLinkClick('/dashboard'); }} style={{color:((getPath()==='login') || (getPath()==='signup') || (getPath()==='history'))?'black':'white'}}>
             <div className="brand-icon">
               <Wallet size={20} color="white" />
             </div>

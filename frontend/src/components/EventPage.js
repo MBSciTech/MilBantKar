@@ -10,8 +10,6 @@ function EventPage() {
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [users, setUsers] = useState([]);
-    
     // Form states for adding expense
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [expenseForm, setExpenseForm] = useState({
@@ -184,12 +182,7 @@ function EventPage() {
         }
     }, [event, searchTerm, selectedCategory]);
 
-    useEffect(() => {
-        fetchEventDetails();
-        fetchUsers();
-    }, [eventId]);
-
-    const fetchEventDetails = async () => {
+    const fetchEventDetails = React.useCallback(async () => {
         try {
             setLoading(true);
             const response = await fetch(`https://milbantkar-1.onrender.com/api/events/${eventId}`);
@@ -203,19 +196,12 @@ function EventPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [eventId]);
 
-    const fetchUsers = async () => {
-        try {
-            const response = await fetch('https://milbantkar-1.onrender.com/api/users');
-            if (!response.ok) throw new Error('Failed to fetch users');
-            
-            const usersData = await response.json();
-            setUsers(usersData);
-        } catch (err) {
-            console.error('Error fetching users:', err);
-        }
-    };
+    useEffect(() => {
+        fetchEventDetails();
+    }, [fetchEventDetails]);
+
 
     const handleParticipantSelect = (participant) => {
         if (selectedParticipants.some(p => p._id === participant._id)) {

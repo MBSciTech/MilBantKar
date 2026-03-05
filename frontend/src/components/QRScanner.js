@@ -110,6 +110,89 @@ function QRScanner() {
         };
     }, []);
 
+    
+    /* joinEvent is memoized and defined before handleScan to keep callbacks stable */
+    const joinEvent = React.useCallback(async (eventCode) => {
+        const userId = getUserId();
+        console.log('🔍 Joining event with code:', eventCode, 'userId:', userId);
+        
+        if (!eventCode || !userId) {
+            console.error('❌ Missing eventCode or userId:', { eventCode, userId });
+            setError('Invalid QR code or user not logged in. Please log in and try again.');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            console.log('📤 Sending join request:', { eventCode, userId });
+            const response = await axios.post(`${API_BASE}/api/events/join/${eventCode}`, {
+                userId: userId,
+            });
+            console.log('✅ Join response:', response.data);
+
+            if (response.data) {
+                showNotification('Successfully joined the event!', 'success');
+                
+                // Redirect to the event page after a short delay
+                setTimeout(() => {
+                    navigate(`/events/${response.data.event._id || response.data.event.id}`);
+                }, 2000);
+            }
+        } catch (err) {
+            console.error('Error joining event:', err);
+            const errorMessage = err.response?.data?.message || 'Failed to join event. Please check the QR code and try again.';
+            setError(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    }, [navigate]);
+
+    /*
+      scan handler comes after the joining callback
+    */
+    const handleScan = React.useCallback(async (content) => {
+        if (!content || !scanning || !isMountedRef.current) return;
+        
+        const trimmedContent = content.trim();
+        console.log('📱 Scanned QR code:', trimmedContent);
+        
+        if (!trimmedContent || trimmedContent.toLowerCase() === "undefined") {
+            setError("Invalid or empty QR code scanned.");
+            setScanning(true);
+            return;
+        }
+
+        setScanning(false);
+        setResult(trimmedContent);
+        
+        // Stop scanner safely
+        if (html5QrcodeScannerRef.current) {
+            try {
+                const scanner = html5QrcodeScannerRef.current;
+                html5QrcodeScannerRef.current = null;
+                await scanner.stop();
+            } catch (err) {
+                // Suppress play() interruption errors and AbortError during cleanup
+                if (
+                    err.name !== 'AbortError' &&
+                    !err.message?.includes('play()') && 
+                    !err.message?.includes('interrupted') &&
+                    !err.message?.includes('media was removed')
+                ) {
+                    console.error('Error stopping scanner:', err);
+                }
+            }
+        }
+        
+        if (isMountedRef.current) {
+            await joinEvent(trimmedContent);
+        }
+    }, [scanning, joinEvent]);
+
+
+
     // Initialize QR Scanner - try to start directly
     useEffect(() => {
         if (scanning && !result && !loading && !html5QrcodeScannerRef.current && cameraPermission !== 'denied' && !isStartingRef.current) {
@@ -245,85 +328,9 @@ function QRScanner() {
                 });
             }
         };
-    }, [scanning, result, loading, cameraPermission]);
+    }, [scanning, result, loading, cameraPermission, handleScan]);
 
-    const handleScan = async (content) => {
-        if (!content || !scanning || !isMountedRef.current) return;
-        
-        const trimmedContent = content.trim();
-        console.log('📱 Scanned QR code:', trimmedContent);
-        
-        if (!trimmedContent || trimmedContent.toLowerCase() === "undefined") {
-            setError("Invalid or empty QR code scanned.");
-            setScanning(true);
-            return;
-        }
 
-        setScanning(false);
-        setResult(trimmedContent);
-        
-        // Stop scanner safely
-        if (html5QrcodeScannerRef.current) {
-            try {
-                const scanner = html5QrcodeScannerRef.current;
-                html5QrcodeScannerRef.current = null;
-                await scanner.stop();
-            } catch (err) {
-                // Suppress play() interruption errors and AbortError during cleanup
-                if (
-                    err.name !== 'AbortError' &&
-                    !err.message?.includes('play()') && 
-                    !err.message?.includes('interrupted') &&
-                    !err.message?.includes('media was removed')
-                ) {
-                    console.error('Error stopping scanner:', err);
-                }
-            }
-        }
-        
-        if (isMountedRef.current) {
-            await joinEvent(trimmedContent);
-        }
-    };
-
-    const joinEvent = async (eventCode) => {
-        const userId = getUserId();
-        console.log('🔍 Joining event with code:', eventCode, 'userId:', userId);
-        
-        if (!eventCode || !userId) {
-            console.error('❌ Missing eventCode or userId:', { eventCode, userId });
-            setError('Invalid QR code or user not logged in. Please log in and try again.');
-            return;
-        }
-
-        setLoading(true);
-        setError('');
-
-        try {
-            console.log('📤 Sending join request:', { eventCode, userId });
-            const response = await axios.post(`${API_BASE}/api/events/join/${eventCode}`, {
-                userId: userId,
-            });
-            console.log('✅ Join response:', response.data);
-
-            if (response.data) {
-                showNotification('Successfully joined the event!', 'success');
-                
-                // Redirect to the event page after a short delay
-                setTimeout(() => {
-                    navigate(`/events/${response.data.event._id || response.data.event.id}`);
-                }, 2000);
-            }
-        } catch (err) {
-            console.error('Error joining event:', err);
-            const errorMessage = err.response?.data?.message || 'Failed to join event. Please check the QR code and try again.';
-            setError(errorMessage);
-            setScanning(true); // Restart scanning on error
-            setResult(null);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const showNotification = (message, type) => {
         // Remove existing notifications first

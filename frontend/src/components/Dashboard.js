@@ -1,16 +1,10 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, RadialBarChart, RadialBar, Legend } from "recharts";
-import { TrendingUp, TrendingDown, Users, Activity, AlertCircle, CheckCircle, Clock, Zap, Target, Eye, Settings, Bell, Plus, CreditCard } from "lucide-react";
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, Legend } from "recharts";
+import { TrendingUp, TrendingDown, Users, Activity, CheckCircle, Clock, Target, CreditCard } from "lucide-react";
 
 function Dashboard() {
-  const [expenses, setExpenses] = useState([]);
   const [filteredExpenses, setFilteredExpenses] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [timeRange, setTimeRange] = useState('30days');
   const [currentUser, setCurrentUser] = useState('');
 
   useEffect(() => {
@@ -35,27 +29,7 @@ function Dashboard() {
         (exp) => exp.paidBy.username === username || exp.paidTo.username === username
       );
       
-      setExpenses(userExpenses);
       setFilteredExpenses(userExpenses);
-
-      // Fetch users
-      const usersRes = await fetch("https://milbantkar-1.onrender.com/api/users");
-      const usersData = await usersRes.json();
-      setUsers(usersData);
-
-      // Fetch user events
-      const userRes = await fetch(`https://milbantkar-1.onrender.com/api/user/${username}`);
-      const userData = await userRes.json();
-      if (userData.length > 0) {
-        const eventsRes = await fetch(`https://milbantkar-1.onrender.com/api/events/user/${userData[0]._id}`);
-        const eventsData = await eventsRes.json();
-        setEvents(eventsData);
-      }
-
-      // Fetch alerts
-      const alertsRes = await fetch("https://milbantkar-1.onrender.com/api/alerts");
-      const alertsData = await alertsRes.json();
-      setAlerts(alertsData);
 
     } catch (error) {
       console.error("❌ Error fetching data:", error);
