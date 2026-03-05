@@ -42,6 +42,15 @@ function Transaction() {
     }
   };
 
+  // initialize recent transactions from storage
+  useEffect(() => {
+    const stored = loadTransactionsWithExpiry();
+    if (stored && stored.length) {
+      setRecentTransactions(stored);
+    }
+  }, []);
+
+
   // Fetch users and load stored transactions
 useEffect(() => {
     fetch('https://milbantkar-1.onrender.com/api/users')

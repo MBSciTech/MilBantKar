@@ -690,7 +690,7 @@ function Signup() {
                   <div className="form-check mb-4">
                     <input className="form-check-input" type="checkbox" id="terms" required />
                     <label className="form-check-label text-muted" htmlFor="terms">
-                      I agree to the <a href="#" className="link-primary text-decoration-none">Terms of Service</a> and <a href="#" className="link-primary text-decoration-none">Privacy Policy</a>
+                      I agree to the <a href="/terms-of-service" className="link-primary text-decoration-none">Terms of Service</a> and <a href="/privacy-policy" className="link-primary text-decoration-none">Privacy Policy</a>
                     </label>
                   </div>
   

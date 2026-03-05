@@ -682,7 +682,16 @@ function Login() {
                       Remember me
                     </label>
                   </div>
-                    <a href="#" className="link-primary text-decoration-none">Forgot password?</a>
+                    {/* accessibility: use a button when there is no actual href */}
+                    <button
+                      type="button"
+                      className="link-primary text-decoration-none btn btn-link p-0"
+                      onClick={() => {
+                        // TODO: implement forgot password flow
+                      }}
+                    >
+                      Forgot password?
+                    </button>
                 </div>
 
                 <button 

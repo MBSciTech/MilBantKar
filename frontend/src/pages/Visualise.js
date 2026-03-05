@@ -110,14 +110,18 @@ function Visualise() {
     });
 
     const maxAmount = Math.max(
-      ...Array.from(edgeMap.values()).map((e) => e.amount)
+      ...Array.from(edgeMap.values()).map((e) => e.amount),
+      0
     );
     const minWidth = 2;
     const maxWidth = 15;
 
     const edges = new DataSet(
       Array.from(edgeMap.entries()).map(([key, data]) => {
-        const width = 2;
+        // scale the line width between minWidth and maxWidth
+        const width = maxAmount > 0
+          ? minWidth + ((data.amount / maxAmount) * (maxWidth - minWidth))
+          : minWidth;
         const isPaid = data.transactions.every((t) => t.status);
 
         return {
