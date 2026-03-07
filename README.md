@@ -148,7 +148,7 @@ npm start
 Create a `.env` file in the backend directory with:
 ```
 PORT=5000
-MONGO_URI=your_mongodb_connection_string
+MONGO_URI=your_mongodb_connection_string=secrete string given by developer only.
 ```
 
 ## API Endpoints
