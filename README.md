@@ -199,4 +199,11 @@ This project is licensed under the ISC License.
 
 ## Support
 
-For support or questions, please refer to the Help page within the application or contact the development team. 
+For support or questions, please refer to the Help page within the application or contact the development team.
+
+##Developer
+
+Maharshi Bhatt
+
+email : maharshibhattisro@gmail.com
+
