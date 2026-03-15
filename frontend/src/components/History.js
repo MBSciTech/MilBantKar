@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
+const API_FALLBACK = "https://milbantkar-1.onrender.com";
+
 function History() {
   const [expenses, setExpenses] = useState([]);
   const [filteredExpenses, setFilteredExpenses] = useState([]);
@@ -42,35 +45,59 @@ function History() {
       : previousExpense.paidTo,
   });
 
+  const fetchJsonWithFallback = async (path) => {
+    try {
+      const primaryResponse = await fetch(`${API_BASE}${path}`);
+      if (!primaryResponse.ok) {
+        throw new Error(`Primary API returned ${primaryResponse.status}`);
+      }
+      return await primaryResponse.json();
+    } catch (primaryError) {
+      try {
+        const fallbackResponse = await fetch(`${API_FALLBACK}${path}`);
+        if (!fallbackResponse.ok) {
+          throw new Error(`Fallback API returned ${fallbackResponse.status}`);
+        }
+        return await fallbackResponse.json();
+      } catch (fallbackError) {
+        throw fallbackError;
+      }
+    }
+  };
+
   useEffect(() => {
     const username = localStorage.getItem("username");
     setUser(username);
 
     if (username) {
-      // Fetch userId for sender
-      fetch(`https://milbantkar-1.onrender.com/api/user/${username}`)
-        .then((res) => res.json())
-        .then((data) => {
-          const userData = Array.isArray(data) ? data[0] : data;
-          if (userData && userData._id) setUserId(userData._id);
-        });
+      const loadInitialData = async () => {
+        try {
+          // Fetch userId for sender (safe catch to avoid unhandled runtime errors)
+          try {
+            const userResponse = await fetchJsonWithFallback(`/api/user/${username}`);
+            const userData = Array.isArray(userResponse) ? userResponse[0] : userResponse;
+            if (userData && userData._id) setUserId(userData._id);
+          } catch (userError) {
+            console.error("Error fetching current user:", userError);
+          }
 
-      fetch("https://milbantkar-1.onrender.com/api/expense")
-        .then((res) => res.json())
-        .then((data) => {
-          const filtered = data.filter(
+          const expensesResponse = await fetchJsonWithFallback('/api/expense');
+          const filtered = expensesResponse.filter(
             (exp) =>
               getUserRefName(exp.paidBy) === username ||
               getUserRefName(exp.paidTo) === username
           );
+
           setExpenses(filtered);
           setFilteredExpenses(filtered);
-          setIsLoading(false);
-        })
-        .catch((err) => {
+        } catch (err) {
           console.error("Error fetching expenses:", err);
+        } finally {
           setIsLoading(false);
-        });
+        }
+      };
+
+      loadInitialData();
     } else {
       setIsLoading(false);
     }
@@ -188,6 +215,12 @@ function History() {
     };
   };
 
+  const getSettlementProgress = (expense) => {
+    const settlement = getSettlementState(expense);
+    const confirmations = Number(settlement.paidByConfirmed) + Number(settlement.paidToConfirmed);
+    return confirmations * 50;
+  };
+
   const canSendReminder = (expense) => {
     return !getSettlementState(expense).status && expense?.paidBy?._id === userId;
   };
@@ -201,7 +234,7 @@ function History() {
 
     setUpdatingStatus(expense._id);
     try {
-      const res = await fetch(`https://milbantkar-1.onrender.com/api/expense/status/${expense._id}`, {
+      const res = await fetch(`${API_BASE}/api/expense/status/${expense._id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"
@@ -246,14 +279,7 @@ function History() {
     try {
       // Get receiver user details
       const receiverIdentifier = getUserRefName(exp.paidTo) !== 'Unknown' ? getUserRefName(exp.paidTo) : getUserRefId(exp.paidTo);
-      const receiverRes = await fetch(`https://milbantkar-1.onrender.com/api/user/${receiverIdentifier}`);
-      
-      if (!receiverRes.ok) {
-        alert("Failed to fetch user details. Please try again.");
-        return;
-      }
-      
-      const receiverData = await receiverRes.json();
+      const receiverData = await fetchJsonWithFallback(`/api/user/${receiverIdentifier}`);
       const receiver = receiverData[0]; // API returns array
       
       if (!receiver) {
@@ -262,7 +288,7 @@ function History() {
       }
       
       // Create in-app alert
-      const alertRes = await fetch("https://milbantkar-1.onrender.com/api/alerts/create", {
+      const alertRes = await fetch(`${API_BASE}/api/alerts/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -613,42 +639,49 @@ function History() {
         }
 
         .settlement-copy {
-          font-size: 0.8rem;
+          font-size: 0.76rem;
           color: #6c757d;
-          margin-bottom: 10px;
+          margin-bottom: 8px;
         }
 
-        .settlement-steps {
+        .settlement-meter {
           display: grid;
           gap: 8px;
         }
 
-        .settlement-step {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          padding: 10px 12px;
-          border-radius: 14px;
-          background: rgba(248, 249, 250, 0.9);
+        .settlement-track {
+          position: relative;
+          height: 10px;
+          border-radius: 999px;
+          overflow: hidden;
+          background: linear-gradient(90deg, rgba(220, 53, 69, 0.14), rgba(255, 193, 7, 0.2));
           border: 1px solid rgba(0, 0, 0, 0.06);
         }
 
-        .settlement-step.is-complete {
-          background: rgba(25, 135, 84, 0.08);
-          border-color: rgba(25, 135, 84, 0.18);
+        .settlement-fill {
+          height: 100%;
+          border-radius: inherit;
+          transition: width 0.3s ease;
+          background: linear-gradient(90deg, #f59f00 0%, #20c997 100%);
         }
 
-        .settlement-user {
+        .settlement-points {
           display: flex;
           align-items: center;
-          gap: 10px;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .settlement-point {
+          display: flex;
+          align-items: center;
+          gap: 8px;
           min-width: 0;
         }
 
         .settlement-avatar {
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
           display: inline-flex;
           align-items: center;
@@ -657,17 +690,18 @@ function History() {
           color: white;
           font-weight: 700;
           flex-shrink: 0;
+          font-size: 0.78rem;
+        }
+
+        .settlement-point.is-complete .settlement-avatar {
+          background: linear-gradient(135deg, #198754 0%, #20c997 100%);
         }
 
         .settlement-name {
           font-weight: 600;
           color: #212529;
-        }
-
-        .settlement-role {
-          display: block;
-          font-size: 0.72rem;
-          color: #6c757d;
+          font-size: 0.8rem;
+          line-height: 1;
         }
 
         .settlement-state {
@@ -675,8 +709,8 @@ function History() {
           align-items: center;
           gap: 6px;
           border-radius: 999px;
-          padding: 6px 10px;
-          font-size: 0.72rem;
+          padding: 4px 8px;
+          font-size: 0.68rem;
           font-weight: 700;
           white-space: nowrap;
         }
@@ -713,6 +747,10 @@ function History() {
 
         .settlement-panel-mobile {
           margin-top: 14px;
+        }
+
+        .settlement-panel-mobile .settlement-summary {
+          margin-bottom: 8px;
         }
       `}</style>
 
@@ -989,32 +1027,25 @@ function History() {
                               <div className="settlement-copy">
                                 {getSettlementLabel(exp).subtitle}
                               </div>
-                              <div className="settlement-steps">
-                                <div className={`settlement-step ${getSettlementState(exp).paidByConfirmed ? 'is-complete' : ''}`}>
-                                  <div className="settlement-user">
-                                    <div className="settlement-avatar">{getUserInitial(exp.paidBy)}</div>
-                                    <div>
-                                      <div className="settlement-name">{getUserRefName(exp.paidBy) === user ? 'You' : getUserRefName(exp.paidBy)}</div>
-                                      <span className="settlement-role">Paid the amount</span>
-                                    </div>
-                                  </div>
-                                  <span className={`settlement-state ${getSettlementState(exp).paidByConfirmed ? 'confirmed' : 'awaiting'}`}>
-                                    <i className={`bi ${getSettlementState(exp).paidByConfirmed ? 'bi-check2-circle' : 'bi-hourglass-split'}`}></i>
-                                    {getSettlementState(exp).paidByConfirmed ? 'Confirmed' : 'Awaiting'}
-                                  </span>
+                              <div className="settlement-meter">
+                                <div className="settlement-track">
+                                  <div className="settlement-fill" style={{ width: `${getSettlementProgress(exp)}%` }}></div>
                                 </div>
-                                <div className={`settlement-step ${getSettlementState(exp).paidToConfirmed ? 'is-complete' : ''}`}>
-                                  <div className="settlement-user">
-                                    <div className="settlement-avatar">{getUserInitial(exp.paidTo)}</div>
-                                    <div>
-                                      <div className="settlement-name">{getUserRefName(exp.paidTo) === user ? 'You' : getUserRefName(exp.paidTo)}</div>
-                                      <span className="settlement-role">Confirms the settlement</span>
-                                    </div>
+                                <div className="settlement-points">
+                                  <div className={`settlement-point ${getSettlementState(exp).paidByConfirmed ? 'is-complete' : ''}`}>
+                                    <div className="settlement-avatar">{getUserInitial(exp.paidBy)}</div>
+                                    <div className="settlement-name">{getUserRefName(exp.paidBy) === user ? 'You' : getUserRefName(exp.paidBy)}</div>
+                                    <span className={`settlement-state ${getSettlementState(exp).paidByConfirmed ? 'confirmed' : 'awaiting'}`}>
+                                      {getSettlementState(exp).paidByConfirmed ? 'Done' : 'Wait'}
+                                    </span>
                                   </div>
-                                  <span className={`settlement-state ${getSettlementState(exp).paidToConfirmed ? 'confirmed' : 'awaiting'}`}>
-                                    <i className={`bi ${getSettlementState(exp).paidToConfirmed ? 'bi-check2-circle' : 'bi-hourglass-split'}`}></i>
-                                    {getSettlementState(exp).paidToConfirmed ? 'Confirmed' : 'Awaiting'}
-                                  </span>
+                                  <div className={`settlement-point ${getSettlementState(exp).paidToConfirmed ? 'is-complete' : ''}`}>
+                                    <div className="settlement-avatar">{getUserInitial(exp.paidTo)}</div>
+                                    <div className="settlement-name">{getUserRefName(exp.paidTo) === user ? 'You' : getUserRefName(exp.paidTo)}</div>
+                                    <span className={`settlement-state ${getSettlementState(exp).paidToConfirmed ? 'confirmed' : 'awaiting'}`}>
+                                      {getSettlementState(exp).paidToConfirmed ? 'Done' : 'Wait'}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1124,30 +1155,25 @@ function History() {
                         {getSettlementLabel(exp).title}
                       </div>
                       <div className="settlement-copy">{getSettlementLabel(exp).subtitle}</div>
-                      <div className="settlement-steps">
-                        <div className={`settlement-step ${getSettlementState(exp).paidByConfirmed ? 'is-complete' : ''}`}>
-                          <div className="settlement-user">
-                            <div className="settlement-avatar">{getUserInitial(exp.paidBy)}</div>
-                            <div>
-                              <div className="settlement-name">{getUserRefName(exp.paidBy) === user ? 'You' : getUserRefName(exp.paidBy)}</div>
-                              <span className="settlement-role">Paid the amount</span>
-                            </div>
-                          </div>
-                          <span className={`settlement-state ${getSettlementState(exp).paidByConfirmed ? 'confirmed' : 'awaiting'}`}>
-                            <i className={`bi ${getSettlementState(exp).paidByConfirmed ? 'bi-check2-circle' : 'bi-hourglass-split'}`}></i>
-                          </span>
+                      <div className="settlement-meter">
+                        <div className="settlement-track">
+                          <div className="settlement-fill" style={{ width: `${getSettlementProgress(exp)}%` }}></div>
                         </div>
-                        <div className={`settlement-step ${getSettlementState(exp).paidToConfirmed ? 'is-complete' : ''}`}>
-                          <div className="settlement-user">
-                            <div className="settlement-avatar">{getUserInitial(exp.paidTo)}</div>
-                            <div>
-                              <div className="settlement-name">{getUserRefName(exp.paidTo) === user ? 'You' : getUserRefName(exp.paidTo)}</div>
-                              <span className="settlement-role">Confirms the settlement</span>
-                            </div>
+                        <div className="settlement-points">
+                          <div className={`settlement-point ${getSettlementState(exp).paidByConfirmed ? 'is-complete' : ''}`}>
+                            <div className="settlement-avatar">{getUserInitial(exp.paidBy)}</div>
+                            <div className="settlement-name">{getUserRefName(exp.paidBy) === user ? 'You' : getUserRefName(exp.paidBy)}</div>
+                            <span className={`settlement-state ${getSettlementState(exp).paidByConfirmed ? 'confirmed' : 'awaiting'}`}>
+                              {getSettlementState(exp).paidByConfirmed ? 'Done' : 'Wait'}
+                            </span>
                           </div>
-                          <span className={`settlement-state ${getSettlementState(exp).paidToConfirmed ? 'confirmed' : 'awaiting'}`}>
-                            <i className={`bi ${getSettlementState(exp).paidToConfirmed ? 'bi-check2-circle' : 'bi-hourglass-split'}`}></i>
-                          </span>
+                          <div className={`settlement-point ${getSettlementState(exp).paidToConfirmed ? 'is-complete' : ''}`}>
+                            <div className="settlement-avatar">{getUserInitial(exp.paidTo)}</div>
+                            <div className="settlement-name">{getUserRefName(exp.paidTo) === user ? 'You' : getUserRefName(exp.paidTo)}</div>
+                            <span className={`settlement-state ${getSettlementState(exp).paidToConfirmed ? 'confirmed' : 'awaiting'}`}>
+                              {getSettlementState(exp).paidToConfirmed ? 'Done' : 'Wait'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
