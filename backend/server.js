@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
@@ -21,6 +22,53 @@ const io = new Server(httpServer, {
     }
 });
 const PORT = process.env.PORT || 5000;
+
+const isSmtpConfigured = Boolean(
+    process.env.SMTP_HOST &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS
+);
+
+let smtpTransporter = null;
+
+const getSmtpTransporter = () => {
+    if (!isSmtpConfigured) return null;
+    if (smtpTransporter) return smtpTransporter;
+
+    smtpTransporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+        }
+    });
+
+    return smtpTransporter;
+};
+
+const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescription, expenseAmount }) => {
+    const transporter = getSmtpTransporter();
+    if (!transporter || !toEmail) return;
+
+    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
+    const safeReceiver = toName || 'there';
+    const safeSender = senderName || 'A user';
+
+    await transporter.sendMail({
+        from: fromAddress,
+        to: toEmail,
+        subject: `MilBantKar Reminder: Pending settlement for ${expenseDescription || 'an expense'}`,
+        text:
+            `Hi ${safeReceiver},\n\n` +
+            `${safeSender} sent you a settlement reminder.\n` +
+            `Expense: ${expenseDescription || 'N/A'}\n` +
+            `Amount: ₹${expenseAmount || 0}\n\n` +
+            `Please open MilBantKar and confirm when settled.\n\n` +
+            `- MilBantKar`,
+    });
+};
 
 // Map userId -> socketId for targeted push
 const userSockets = new Map();
@@ -522,6 +570,23 @@ app.post('/api/alerts/create', async (req, res) => {
             const receiverSocketId = userSockets.get(String(receiver));
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('new-notification', populated);
+            }
+        }
+
+        // Optional email reminder for receiver (does not fail alert creation on SMTP errors).
+        if (type === 'info' && receiver) {
+            try {
+                const receiverUser = await User.findById(receiver).select('email username');
+                const senderName = populated?.sender?.username || 'A user';
+                await sendReminderEmail({
+                    toEmail: receiverUser?.email,
+                    toName: receiverUser?.username,
+                    senderName,
+                    expenseDescription: populated?.expenseDetails?.description,
+                    expenseAmount: populated?.expenseDetails?.amount,
+                });
+            } catch (mailError) {
+                console.error('⚠️ Reminder email failed (alert still created):', mailError.message || mailError);
             }
         }
 
