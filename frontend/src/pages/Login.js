@@ -197,27 +197,47 @@ function Login() {
   return (
     <>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Marcellus&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap');
+
+        :root {
+          --bg-night: #2f1b15;
+          --bg-ocean: #5a2f1b;
+          --bg-sun: #f59e0b;
+          --card-bg: rgba(255, 249, 240, 0.9);
+          --card-stroke: rgba(255, 255, 255, 0.55);
+          --text-strong: #3a1f12;
+          --text-soft: #7b4b2f;
+          --brand-a: #d97706;
+          --brand-b: #9a3412;
+          --brand-c: #0f766e;
+        }
+
         .login-container {
           min-height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background:
+            radial-gradient(circle at 10% 12%, rgba(245, 158, 11, 0.4), transparent 40%),
+            radial-gradient(circle at 88% 18%, rgba(153, 27, 27, 0.38), transparent 36%),
+            radial-gradient(circle at 70% 85%, rgba(15, 118, 110, 0.22), transparent 42%),
+            linear-gradient(145deg, #1f1110 0%, #5a2f1b 55%, #3f2416 100%);
           position: relative;
           overflow: hidden;
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 20px;
+          font-family: 'Marcellus', serif;
         }
         
         .login-container::before {
           content: '';
           position: absolute;
-          top: -50%;
-          right: -50%;
-          width: 200%;
-          height: 200%;
-          background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-          background-size: 50px 50px;
-          animation: drift 20s linear infinite;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(245, 222, 179, 0.2) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(245, 222, 179, 0.2) 1px, transparent 1px);
+          background-size: 44px 44px;
+          mask-image: radial-gradient(circle at center, black 35%, transparent 95%);
+          opacity: 0.2;
         }
         
         .background-shapes {
@@ -232,32 +252,33 @@ function Login() {
         
         .shape {
           position: absolute;
-          opacity: 0.1;
+          opacity: 0.42;
           border-radius: 50%;
+          filter: blur(2px);
         }
         
         .shape-1 {
-          width: 250px;
-          height: 250px;
-          background: linear-gradient(45deg, #ff6b6b, #feca57);
-          top: 15%;
-          left: 10%;
+          width: 300px;
+          height: 300px;
+          background: radial-gradient(circle at 30% 30%, rgba(251, 146, 60, 0.9), rgba(217, 119, 6, 0.08));
+          top: 10%;
+          left: 4%;
         }
         
         .shape-2 {
-          width: 180px;
-          height: 180px;
-          background: linear-gradient(45deg, #48dbfb, #0abde3);
-          bottom: 25%;
-          right: 15%;
+          width: 240px;
+          height: 240px;
+          background: radial-gradient(circle at 30% 30%, rgba(180, 83, 9, 0.95), rgba(127, 29, 29, 0.08));
+          bottom: 14%;
+          right: 10%;
         }
         
         .shape-3 {
-          width: 120px;
-          height: 120px;
-          background: linear-gradient(45deg, #1dd1a1, #10ac84);
-          top: 60%;
-          left: 5%;
+          width: 160px;
+          height: 160px;
+          background: radial-gradient(circle at 30% 30%, rgba(13, 148, 136, 0.85), rgba(20, 83, 45, 0.05));
+          top: 68%;
+          left: 14%;
         }
         
         @keyframes drift {
@@ -288,24 +309,46 @@ function Login() {
         }
         
         .login-card {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(20px);
-          border-radius: 24px;
+          background: var(--card-bg);
+          backdrop-filter: blur(14px);
+          border-radius: 28px;
           box-shadow: 
-            0 25px 50px rgba(0, 0, 0, 0.25),
-            inset 0 1px 0 rgba(255, 255, 255, 0.5);
-          border: 1px solid rgba(255, 255, 255, 0.3);
+            0 28px 70px rgba(45, 19, 8, 0.55),
+            inset 0 1px 0 rgba(255, 249, 240, 0.95);
+          border: 1px solid rgba(180, 83, 9, 0.22);
           animation: slideUp 0.6s ease-out;
           position: relative;
           z-index: 10;
-          transition: all 0.3s ease;
+          transition: all 0.35s ease;
+          overflow: hidden;
+        }
+
+        .login-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 6px;
+          background: linear-gradient(90deg, #ea580c, #f59e0b, #0f766e);
+        }
+
+        .login-card::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            radial-gradient(circle at 20px 20px, rgba(153, 27, 27, 0.1) 2px, transparent 3px);
+          background-size: 32px 32px;
+          opacity: 0.25;
         }
         
         .login-card:hover {
-          transform: translateY(-5px);
+          transform: translateY(-7px);
           box-shadow: 
-            0 30px 60px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            0 32px 80px rgba(45, 19, 8, 0.62),
+            inset 0 1px 0 rgba(255, 249, 240, 0.95);
         }
         
         @keyframes slideUp {
@@ -320,13 +363,42 @@ function Login() {
         }
         
         .gradient-icon {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
+          background: linear-gradient(135deg, #f59e0b 0%, #9a3412 100%);
+          box-shadow: 0 16px 30px rgba(154, 52, 18, 0.34);
           transition: all 0.3s ease;
         }
         
         .gradient-icon:hover {
-          transform: scale(1.1) rotate(-5deg);
+          transform: scale(1.08) rotate(-6deg);
+        }
+
+        .brand-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          font-weight: 700;
+          color: #7c2d12;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          border-radius: 999px;
+          padding: 7px 14px;
+          background: rgba(249, 115, 22, 0.14);
+          border: 1px solid rgba(154, 52, 18, 0.24);
+          margin-bottom: 12px;
+        }
+
+        .title-text {
+          font-family: 'Tiro Devanagari Hindi', serif;
+          font-size: 2rem;
+          letter-spacing: 0;
+          color: var(--text-strong);
+        }
+
+        .subtitle-text {
+          color: var(--text-soft);
+          font-size: 0.98rem;
+          margin-top: 4px;
         }
         
         .input-with-icon {
@@ -345,16 +417,17 @@ function Login() {
         
         .custom-input {
           padding-left: 50px !important;
-          border: 2px solid #e8ecf4;
-          border-radius: 16px;
+          border: 2px solid #dde6ee;
+          border-radius: 14px;
           transition: all 0.3s ease;
           height: 56px;
           font-size: 16px;
+          background: rgba(255, 255, 255, 0.86);
         }
         
         .custom-input:focus {
-          border-color: #667eea;
-          box-shadow: 0 0 0 0.3rem rgba(102, 126, 234, 0.15);
+          border-color: #b45309;
+          box-shadow: 0 0 0 0.24rem rgba(180, 83, 9, 0.18);
           transform: translateY(-2px);
         }
         
@@ -384,18 +457,19 @@ function Login() {
         }
         
         .password-toggle:hover {
-          color: #667eea;
-          background: rgba(102, 126, 234, 0.1);
+          color: #7c2d12;
+          background: rgba(180, 83, 9, 0.12);
         }
         
         .btn-login {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #b45309 0%, #7f1d1d 100%);
           border: none;
-          border-radius: 16px;
+          border-radius: 14px;
           padding: 16px;
           font-weight: 600;
           font-size: 1.1rem;
-          box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
+          letter-spacing: 0.02em;
+          box-shadow: 0 16px 34px rgba(127, 29, 29, 0.35);
           transition: all 0.3s ease;
           height: 56px;
           position: relative;
@@ -415,7 +489,7 @@ function Login() {
         
         .btn-login:hover:not(:disabled) {
           transform: translateY(-3px);
-          box-shadow: 0 20px 45px rgba(102, 126, 234, 0.5);
+          box-shadow: 0 20px 45px rgba(127, 29, 29, 0.45);
         }
         
         .btn-login:hover:not(:disabled)::before {
@@ -432,32 +506,32 @@ function Login() {
         }
         
         .btn-demo {
-          background: linear-gradient(135deg, #ff9ff3 0%, #f368e0 100%);
+          background: linear-gradient(135deg, #0f766e 0%, #115e59 100%);
           border: none;
-          border-radius: 16px;
+          border-radius: 14px;
           padding: 12px;
           font-weight: 600;
-          box-shadow: 0 10px 30px rgba(255, 159, 243, 0.4);
+          box-shadow: 0 10px 28px rgba(15, 118, 110, 0.32);
           transition: all 0.3s ease;
           margin-bottom: 16px;
         }
         
         .btn-demo:hover {
           transform: translateY(-2px);
-          box-shadow: 0 15px 40px rgba(255, 159, 243, 0.5);
+          box-shadow: 0 15px 40px rgba(15, 118, 110, 0.4);
         }
         
         .form-check-input:checked {
-          background-color: #667eea;
-          border-color: #667eea;
+          background-color: #b45309;
+          border-color: #b45309;
         }
         
         .form-check-input:focus {
-          box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+          box-shadow: 0 0 0 0.2rem rgba(180, 83, 9, 0.22);
         }
         
         .link-primary {
-          color: #667eea !important;
+          color: #7c2d12 !important;
           font-weight: 600;
           transition: all 0.3s ease;
           position: relative;
@@ -470,12 +544,12 @@ function Login() {
           left: 0;
           width: 0;
           height: 2px;
-          background: #667eea;
+          background: #7c2d12;
           transition: width 0.3s ease;
         }
         
         .link-primary:hover {
-          color: #764ba2 !important;
+          color: #9a3412 !important;
           text-decoration: none;
         }
         
@@ -522,12 +596,51 @@ function Login() {
         .divider::after {
           margin-left: 10px;
         }
+
+        .security-note {
+          background: linear-gradient(90deg, rgba(249, 115, 22, 0.16), rgba(15, 118, 110, 0.16));
+          border: 1px solid rgba(154, 52, 18, 0.26);
+          border-radius: 12px;
+          color: #7c2d12;
+          font-size: 0.86rem;
+          padding: 10px 12px;
+          text-align: center;
+          margin-top: 14px;
+        }
+
+        .motif {
+          position: absolute;
+          width: 72px;
+          height: 72px;
+          border-radius: 50%;
+          background:
+            repeating-conic-gradient(from 0deg, rgba(154, 52, 18, 0.2) 0deg 12deg, rgba(245, 158, 11, 0.1) 12deg 24deg);
+          border: 1px solid rgba(154, 52, 18, 0.25);
+          box-shadow: inset 0 0 0 10px rgba(255, 249, 240, 0.75);
+          opacity: 0.8;
+          pointer-events: none;
+        }
+
+        .motif-top {
+          top: 12px;
+          right: 12px;
+        }
+
+        .motif-bottom {
+          bottom: 12px;
+          left: 12px;
+          transform: rotate(45deg);
+        }
         
         /* Responsive improvements */
         @media (max-width: 768px) {
           .login-card {
             margin: 10px;
             padding: 24px !important;
+          }
+
+          .title-text {
+            font-size: 1.7rem;
           }
           
           .login-container {
@@ -584,13 +697,18 @@ function Login() {
           <div className="row justify-content-center">
             <div className="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-4">
               <div className="login-card p-4 p-md-5">
+              <div className="motif motif-top"></div>
+              <div className="motif motif-bottom"></div>
               <div className="text-center mb-4">
+                  <div className="brand-chip">
+                    <span>Mil Bant Kar Parivar</span>
+                  </div>
                   <div className="gradient-icon rounded-circle d-inline-flex align-items-center justify-content-center mb-3" 
                        style={{width: '80px', height: '80px'}}>
                     <span className="text-white fs-1">💰</span>
                 </div>
-                  <h2 className="fw-bold mb-2" style={{color: '#2d3748'}}>Welcome Back</h2>
-                  <p className="text-muted mb-0">Sign in to manage your expenses</p>
+                  <h2 className="fw-bold mb-1 title-text">Namaste, Swagat Hai</h2>
+                  <p className="subtitle-text mb-0">Apne kharchon ka hisaab, ab desi andaaz mein.</p>
               </div>
 
                 <button 
@@ -713,6 +831,10 @@ function Login() {
                   <span className="text-muted">Don't have an account? </span>
                     <a href="/signup" className="link-primary text-decoration-none fw-semibold">Sign up</a>
                 </div>
+
+                  <div className="security-note">
+                    Surakshit login for your event, history, and settlement records.
+                  </div>
               </form>
             </div>
           </div>

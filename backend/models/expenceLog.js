@@ -30,6 +30,24 @@ const expenseLogSchema = new mongoose.Schema(
     status: {
       type: Boolean,
       default : false
+    },
+    settlementConfirmation: {
+      paidByConfirmed: {
+        type: Boolean,
+        default: false
+      },
+      paidToConfirmed: {
+        type: Boolean,
+        default: false
+      },
+      paidByConfirmedAt: {
+        type: Date,
+        default: null
+      },
+      paidToConfirmedAt: {
+        type: Date,
+        default: null
+      }
     }
   }
 );

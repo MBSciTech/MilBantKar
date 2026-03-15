@@ -186,6 +186,23 @@ app.put('/api/user/:id', async (req, res) => {
 
 
 //Expence rounts 
+const buildSettlementState = (expense) => {
+    const legacySettled = Boolean(expense.status);
+    const paidByConfirmed = expense.settlementConfirmation?.paidByConfirmed ?? legacySettled;
+    const paidToConfirmed = expense.settlementConfirmation?.paidToConfirmed ?? legacySettled;
+
+    return {
+        paidByConfirmed,
+        paidToConfirmed,
+        paidByConfirmedAt: paidByConfirmed
+            ? expense.settlementConfirmation?.paidByConfirmedAt || expense.updatedAt || expense.date || new Date()
+            : null,
+        paidToConfirmedAt: paidToConfirmed
+            ? expense.settlementConfirmation?.paidToConfirmedAt || expense.updatedAt || expense.date || new Date()
+            : null
+    };
+};
+
 // Add an expense log
 app.post('/api/expense/add', async (req, res) => {
     try {
@@ -203,6 +220,12 @@ app.post('/api/expense/add', async (req, res) => {
             description,
             date,
             status:false,
+            settlementConfirmation: {
+                paidByConfirmed: false,
+                paidToConfirmed: false,
+                paidByConfirmedAt: null,
+                paidToConfirmedAt: null
+            }
         });
 
         // Save to DB
@@ -241,9 +264,18 @@ app.get("/api/expense", async (req, res) => {
         .populate("paidBy", "username _id")
         .populate("paidTo", "username _id");
 
-    //   console.log(expenses)
-  
-      res.status(200).json(expenses);
+      const normalizedExpenses = expenses.map((expense) => {
+        const normalizedSettlement = buildSettlementState(expense);
+        const normalizedStatus = normalizedSettlement.paidByConfirmed && normalizedSettlement.paidToConfirmed;
+
+        return {
+            ...expense.toObject(),
+            status: normalizedStatus,
+            settlementConfirmation: normalizedSettlement
+        };
+      });
+
+      res.status(200).json(normalizedExpenses);
     } catch (error) {
       console.error("❌ Error fetching expenses:", error);
       res.status(500).json({ message: "Server error" });
@@ -252,18 +284,55 @@ app.get("/api/expense", async (req, res) => {
 
 app.put('/api/expense/status/:id', async (req, res) => {
     const { id } = req.params;
+    const { userId } = req.body;
 
     try {
+        if (!userId) {
+            return res.status(400).json({ message: 'userId is required' });
+        }
+
         const expense = await expenceLog.findById(id);
         if (!expense) {
             return res.status(404).json({ message: 'Expense not found' });
         }
 
-        // Toggle
-        expense.status = !expense.status;
+        const paidById = expense.paidBy.toString();
+        const paidToId = expense.paidTo.toString();
+
+        if (paidById !== userId && paidToId !== userId) {
+            return res.status(403).json({ message: 'Only the two users in this transaction can update settlement status' });
+        }
+
+        const normalizedSettlement = buildSettlementState(expense);
+        const isPaidByUser = paidById === userId;
+
+        expense.settlementConfirmation = {
+            ...normalizedSettlement,
+            paidByConfirmed: isPaidByUser
+                ? !normalizedSettlement.paidByConfirmed
+                : normalizedSettlement.paidByConfirmed,
+            paidToConfirmed: isPaidByUser
+                ? normalizedSettlement.paidToConfirmed
+                : !normalizedSettlement.paidToConfirmed,
+            paidByConfirmedAt: isPaidByUser
+                ? (!normalizedSettlement.paidByConfirmed ? new Date() : null)
+                : normalizedSettlement.paidByConfirmedAt,
+            paidToConfirmedAt: isPaidByUser
+                ? normalizedSettlement.paidToConfirmedAt
+                : (!normalizedSettlement.paidToConfirmed ? new Date() : null)
+        };
+
+        expense.status = expense.settlementConfirmation.paidByConfirmed && expense.settlementConfirmation.paidToConfirmed;
         await expense.save();
 
-        res.json(expense);
+        const updatedExpense = await expenceLog.findById(id)
+            .populate('paidBy', 'username _id')
+            .populate('paidTo', 'username _id');
+
+        res.json({
+            ...updatedExpense.toObject(),
+            status: updatedExpense.settlementConfirmation.paidByConfirmed && updatedExpense.settlementConfirmation.paidToConfirmed
+        });
     } catch (error) {
         console.error('Error ' + error);
         res.status(500).json({ message: 'Server error' });
