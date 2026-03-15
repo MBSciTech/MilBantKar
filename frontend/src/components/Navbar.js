@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import { 
   Menu, 
   X, 
@@ -30,6 +31,8 @@ function Navbar() {
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [showAllNotifications, setShowAllNotifications] = useState(false);
+  const socketRef = useRef(null);
   
   const [user, setUser] = useState({
     avatar: '', 
@@ -85,31 +88,65 @@ function Navbar() {
     };
   }, [isProfileOpen, isAlertsOpen]);
   
-  // Fetch alerts
   const [alerts, setAlerts] = useState([]);
+
+  const filterForCurrentUser = (data, user) => {
+    if (!user) return data.slice().reverse();
+    return data
+      .filter(alert =>
+        !alert.receiver ||
+        alert.receiver._id === user._id ||
+        alert.receiver.username === user.username
+      )
+      .slice()
+      .reverse();
+  };
+
+  // Initial fetch + Socket.IO connection
   useEffect(() => {
-    fetch("https://milbantkar-1.onrender.com/api/alerts")
-      .then((res) => {
+    if (!currentUser) return;
+
+    const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
+    // Fetch existing alerts
+    fetch(`${API_BASE}/api/alerts`)
+      .then(res => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
       })
-      .then((data) => {
-        // Filter alerts for current user if we have user data
-        const userAlerts = currentUser ? 
-          data.filter(alert => 
-            !alert.receiver || 
-            alert.receiver._id === currentUser._id || 
-            alert.receiver.username === currentUser.username
-          ).reverse() : 
-          data.reverse();
-        
+      .then(data => {
+        const userAlerts = filterForCurrentUser(data, currentUser);
         setAlerts(userAlerts);
-        
-        // Count unseen alerts
-        const unseenCount = userAlerts.filter(alert => !alert.seen).length;
-        setAlertCount(unseenCount);
+        setAlertCount(userAlerts.filter(a => !a.seen).length);
       })
-      .catch((err) => console.error("Fetch error:", err));
+      .catch(err => {
+        // Fallback to Render when local is down
+        fetch('https://milbantkar-1.onrender.com/api/alerts')
+          .then(res => res.json())
+          .then(data => {
+            const userAlerts = filterForCurrentUser(data, currentUser);
+            setAlerts(userAlerts);
+            setAlertCount(userAlerts.filter(a => !a.seen).length);
+          })
+          .catch(e => console.error('Fetch error:', e));
+      });
+
+    // Connect Socket.IO and register this user
+    const socket = io(API_BASE, { transports: ['websocket', 'polling'] });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('register', currentUser._id);
+    });
+
+    socket.on('new-notification', (newAlert) => {
+      setAlerts(prev => [newAlert, ...prev]);
+      setAlertCount(prev => prev + 1);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, [currentUser]);
 
   const navigationItems = [
@@ -149,29 +186,28 @@ function Navbar() {
     setSelectedAlert(alert);
     setIsModalOpen(true);
     setIsAlertsOpen(false);
-    
-    // Mark as seen (you can implement API call here)
+
     markAlertAsSeen(alert._id);
   };
 
   const markAlertAsSeen = async (alertId) => {
+    const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
     try {
-      // You'll need to implement this API endpoint
-      await fetch(`https://milbantkar-1.onrender.com/api/alerts/seen/${alertId}`, {
+      await fetch(`${API_BASE}/api/alerts/seen/${alertId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
       });
-      
-      // Update local state
-      setAlerts(prev => prev.map(alert => 
-        alert._id === alertId ? { ...alert, seen: true } : alert
-      ));
-      
-      // Update count
-      setAlertCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking alert as seen:', error);
+    } catch {
+      // Keep UI responsive even if seen API call fails.
     }
+
+    setAlerts(prev => prev.map(a => (a._id === alertId ? { ...a, seen: true } : a)));
+    setAlertCount(prev => Math.max(0, prev - 1));
+  };
+
+  const markAllRead = async () => {
+    const unseenAlerts = alerts.filter(a => !a.seen);
+    await Promise.all(unseenAlerts.map(a => markAlertAsSeen(a._id)));
   };
 
 
@@ -928,53 +964,81 @@ function Navbar() {
               <div className={`dropdown-menu ${isAlertsOpen ? 'show' : ''}`}>
                 <div className="dropdown-header">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                    <h6 style={{ margin: 0, fontWeight: 'bold' }}>Notifications</h6>
-                    <button 
-                      style={{ 
-                        background: 'none', 
-                        border: 'none', 
-                        color: '#0d6efd', 
-                        fontSize: '0.85rem',
-                        cursor: 'pointer',
-                        padding: 0
-                      }}
-                      onClick={() => setAlertCount(0)}
-                    >
-                      Mark all read
-                    </button>
+                    <h6 style={{ margin: 0, fontWeight: 'bold' }}>
+                      Notifications
+                      {alertCount > 0 && (
+                        <span style={{ marginLeft: '6px', background: '#e53e3e', color: 'white', borderRadius: '999px', padding: '1px 7px', fontSize: '0.72rem' }}>
+                          {alertCount}
+                        </span>
+                      )}
+                    </h6>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <button
+                        style={{ background: 'none', border: 'none', color: '#6c757d', fontSize: '0.82rem', cursor: 'pointer', padding: 0 }}
+                        onClick={() => setShowAllNotifications(v => !v)}
+                      >
+                        {showAllNotifications ? 'Unread only' : 'Show all'}
+                      </button>
+                      {alertCount > 0 && (
+                        <button
+                          style={{ background: 'none', border: 'none', color: '#0d6efd', fontSize: '0.82rem', cursor: 'pointer', padding: 0 }}
+                          onClick={markAllRead}
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {alerts.length === 0 ? (
-                  <div className="alert-item" style={{ textAlign: 'center', color: '#6c757d' }}>
-                    <Bell size={24} style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
-                    <div>No notifications yet</div>
-                  </div>
-                ) : (
-                  alerts.slice(0, 5).map(alert => (
-                    <div 
-                      key={alert._id} 
+                {(() => {
+                  const displayed = showAllNotifications ? alerts : alerts.filter(a => !a.seen);
+
+                  if (displayed.length === 0) {
+                    return (
+                      <div className="alert-item" style={{ textAlign: 'center', color: '#6c757d', padding: '1.5rem' }}>
+                        <Bell size={24} style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
+                        <div>{showAllNotifications ? 'No notifications yet' : 'No unread notifications'}</div>
+                        {!showAllNotifications && alerts.length > 0 && (
+                          <button
+                            style={{ background: 'none', border: 'none', color: '#0d6efd', fontSize: '0.82rem', cursor: 'pointer', marginTop: '0.5rem' }}
+                            onClick={() => setShowAllNotifications(true)}
+                          >
+                            View all {alerts.length} →
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return displayed.map(alert => (
+                    <div
+                      key={alert._id}
                       className={`alert-item ${!alert.seen ? 'unread' : ''}`}
                       onClick={() => handleNotificationClick(alert)}
                     >
                       <div style={{ display: 'flex', alignItems: 'start', gap: '0.75rem' }}>
                         {getAlertIcon(alert.type)}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ 
-                            fontWeight: !alert.seen ? '600' : '500', 
-                            fontSize: '0.9rem',
-                            marginBottom: '0.25rem',
-                            lineHeight: '1.4'
-                          }}>
+                          <div
+                            style={{
+                              fontWeight: !alert.seen ? '600' : '500',
+                              fontSize: '0.9rem',
+                              marginBottom: '0.25rem',
+                              lineHeight: '1.4'
+                            }}
+                          >
                             {alert.message}
                           </div>
-                          <div style={{ 
-                            fontSize: '0.8rem', 
-                            color: '#6c757d',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem'
-                          }}>
+                          <div
+                            style={{
+                              fontSize: '0.8rem',
+                              color: '#6c757d',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem'
+                            }}
+                          >
                             <Clock size={12} />
                             {formatTimeAgo(alert.createdAt)}
                             {alert.sender && (
@@ -985,49 +1049,35 @@ function Navbar() {
                             )}
                           </div>
                           {alert.type === 'poll' && (
-                            <div style={{ 
-                              fontSize: '0.75rem', 
-                              color: '#0d6efd',
-                              marginTop: '0.25rem',
-                              fontWeight: '500'
-                            }}>
+                            <div
+                              style={{
+                                fontSize: '0.75rem',
+                                color: '#0d6efd',
+                                marginTop: '0.25rem',
+                                fontWeight: '500'
+                              }}
+                            >
                               <Vote size={12} style={{ marginRight: '0.25rem' }} />
                               Poll • Click to vote
                             </div>
                           )}
                         </div>
                         {!alert.seen && (
-                          <div style={{
-                            width: '8px',
-                            height: '8px',
-                            background: getAlertTypeColor(alert.type),
-                            borderRadius: '50%',
-                            flexShrink: 0,
-                            marginTop: '0.5rem'
-                          }}></div>
+                          <div
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              background: getAlertTypeColor(alert.type),
+                              borderRadius: '50%',
+                              flexShrink: 0,
+                              marginTop: '0.5rem'
+                            }}
+                          ></div>
                         )}
                       </div>
                     </div>
-                  ))
-                )}
-
-                {alerts.length > 5 && (
-                  <div style={{ textAlign: 'center', padding: '1rem' }}>
-                    <button 
-                      style={{ 
-                        background: 'none', 
-                        border: 'none', 
-                        color: '#0d6efd', 
-                        fontSize: '0.85rem',
-                        fontWeight: '500',
-                        cursor: 'pointer'
-                      }}
-                      onClick={(e) => { e.preventDefault(); handleLinkClick('/notifications'); }}
-                    >
-                      View all {alerts.length} notifications →
-                    </button>
-                  </div>
-                )}
+                  ));
+                })()}
               </div>
             </div>
 

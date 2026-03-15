@@ -56,6 +56,7 @@ function History() {
       try {
         const fallbackResponse = await fetch(`${API_FALLBACK}${path}`);
         if (!fallbackResponse.ok) {
+          console.log("API FALL BACK Called");
           throw new Error(`Fallback API returned ${fallbackResponse.status}`);
         }
         return await fallbackResponse.json();
