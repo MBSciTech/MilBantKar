@@ -25,6 +25,7 @@ import {
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onrender.com';
 const API_FALLBACK = 'http://localhost:5000';
+const SEEN_ALERTS_STORAGE_KEY = 'seenAlertIds';
 
 function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -36,6 +37,7 @@ function Navbar() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
   const socketRef = useRef(null);
+  const seenApiAvailableRef = useRef(true);
   
   const [user, setUser] = useState({
     avatar: '', 
@@ -93,6 +95,30 @@ function Navbar() {
   
   const [alerts, setAlerts] = useState([]);
 
+  const getSeenAlertIds = () => {
+    try {
+      const raw = localStorage.getItem(SEEN_ALERTS_STORAGE_KEY);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return new Set();
+    }
+  };
+
+  const addSeenAlertId = (alertId) => {
+    const seenIds = getSeenAlertIds();
+    seenIds.add(alertId);
+    localStorage.setItem(SEEN_ALERTS_STORAGE_KEY, JSON.stringify([...seenIds]));
+  };
+
+  const applyLocalSeenState = (alertList) => {
+    const seenIds = getSeenAlertIds();
+    return alertList.map((alert) =>
+      seenIds.has(alert._id) ? { ...alert, seen: true } : alert
+    );
+  };
+
   const filterForCurrentUser = (data, user) => {
     if (!user) return data.slice().reverse();
     return data
@@ -116,7 +142,7 @@ function Navbar() {
         return res.json();
       })
       .then(data => {
-        const userAlerts = filterForCurrentUser(data, currentUser);
+        const userAlerts = applyLocalSeenState(filterForCurrentUser(data, currentUser));
         setAlerts(userAlerts);
         setAlertCount(userAlerts.filter(a => !a.seen).length);
       })
@@ -125,7 +151,7 @@ function Navbar() {
         fetch(`${API_FALLBACK}/api/alerts`)
           .then(res => res.json())
           .then(data => {
-            const userAlerts = filterForCurrentUser(data, currentUser);
+            const userAlerts = applyLocalSeenState(filterForCurrentUser(data, currentUser));
             setAlerts(userAlerts);
             setAlertCount(userAlerts.filter(a => !a.seen).length);
           })
@@ -141,8 +167,11 @@ function Navbar() {
     });
 
     socket.on('new-notification', (newAlert) => {
-      setAlerts(prev => [newAlert, ...prev]);
-      setAlertCount(prev => prev + 1);
+      const withSeenState = applyLocalSeenState([newAlert])[0];
+      setAlerts(prev => [withSeenState, ...prev]);
+      if (!withSeenState.seen) {
+        setAlertCount(prev => prev + 1);
+      }
     });
 
     return () => {
@@ -192,13 +221,22 @@ function Navbar() {
   };
 
   const markAlertAsSeen = async (alertId) => {
-    try {
-      await fetch(`${API_BASE}/api/alerts/seen/${alertId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch {
-      // Keep UI responsive even if seen API call fails.
+    addSeenAlertId(alertId);
+
+    // Deployed API may not have this route yet; disable remote call after first 404.
+    if (seenApiAvailableRef.current) {
+      try {
+        const response = await fetch(`${API_BASE}/api/alerts/seen/${alertId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response.status === 404) {
+          seenApiAvailableRef.current = false;
+        }
+      } catch {
+        // Keep UI responsive even if seen API call fails.
+      }
     }
 
     setAlerts(prev => prev.map(a => (a._id === alertId ? { ...a, seen: true } : a)));
