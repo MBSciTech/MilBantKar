@@ -27,6 +27,30 @@ const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onr
 const API_FALLBACK = 'http://localhost:5000';
 const SEEN_ALERTS_STORAGE_KEY = 'seenAlertIds';
 
+const getSeenAlertIds = () => {
+  try {
+    const raw = localStorage.getItem(SEEN_ALERTS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const addSeenAlertId = (alertId) => {
+  const seenIds = getSeenAlertIds();
+  seenIds.add(alertId);
+  localStorage.setItem(SEEN_ALERTS_STORAGE_KEY, JSON.stringify([...seenIds]));
+};
+
+const applyLocalSeenState = (alertList) => {
+  const seenIds = getSeenAlertIds();
+  return alertList.map((alert) =>
+    seenIds.has(alert._id) ? { ...alert, seen: true } : alert
+  );
+};
+
 function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [alertCount, setAlertCount] = useState(0);
@@ -94,30 +118,6 @@ function Navbar() {
   }, [isProfileOpen, isAlertsOpen]);
   
   const [alerts, setAlerts] = useState([]);
-
-  const getSeenAlertIds = () => {
-    try {
-      const raw = localStorage.getItem(SEEN_ALERTS_STORAGE_KEY);
-      if (!raw) return new Set();
-      const parsed = JSON.parse(raw);
-      return new Set(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      return new Set();
-    }
-  };
-
-  const addSeenAlertId = (alertId) => {
-    const seenIds = getSeenAlertIds();
-    seenIds.add(alertId);
-    localStorage.setItem(SEEN_ALERTS_STORAGE_KEY, JSON.stringify([...seenIds]));
-  };
-
-  const applyLocalSeenState = (alertList) => {
-    const seenIds = getSeenAlertIds();
-    return alertList.map((alert) =>
-      seenIds.has(alert._id) ? { ...alert, seen: true } : alert
-    );
-  };
 
   const filterForCurrentUser = (data, user) => {
     if (!user) return data.slice().reverse();
