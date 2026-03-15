@@ -505,27 +505,6 @@ app.post('/api/alerts/create', async (req, res) => {
 
         await newAlert.save();
 
-        res.status(201).json({ message: "Alert created successfully", alert: newAlert });
-// Create a new alert (message or poll)
-app.post('/api/alerts/create', async (req, res) => {
-    try {
-        const { sender, receiver, message, type, expenseDetails, pollOptions } = req.body;
-
-        if (!sender || !message) {
-            return res.status(400).json({ message: "Sender, message are required" });
-        }
-
-        const newAlert = new Alert({
-            sender,
-            receiver,
-            message,
-            type,
-            expenseDetails,
-            pollOptions
-        });
-
-        await newAlert.save();
-
         // Populate before emitting so the client gets full data
         const populated = await Alert.findById(newAlert._id)
             .populate('sender', 'username')
