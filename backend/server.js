@@ -48,15 +48,41 @@ const getSmtpTransporter = () => {
     return smtpTransporter;
 };
 
+const verifySmtpConnection = async () => {
+    const transporter = getSmtpTransporter();
+
+    if (!transporter) {
+        console.log('⚠️ SMTP is not configured. Reminder emails are disabled.');
+        return false;
+    }
+
+    try {
+        await transporter.verify();
+        console.log('✅ SMTP connection verified successfully.');
+        return true;
+    } catch (error) {
+        console.error('❌ SMTP verification failed:', error.message || error);
+        return false;
+    }
+};
+
 const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescription, expenseAmount }) => {
     const transporter = getSmtpTransporter();
-    if (!transporter || !toEmail) return;
+    if (!transporter) {
+        console.log('⚠️ Reminder email skipped: SMTP transporter is unavailable.');
+        return { sent: false, reason: 'smtp_not_configured' };
+    }
+
+    if (!toEmail) {
+        console.log('⚠️ Reminder email skipped: receiver email is missing.');
+        return { sent: false, reason: 'missing_receiver_email' };
+    }
 
     const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
     const safeReceiver = toName || 'there';
     const safeSender = senderName || 'A user';
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
         from: fromAddress,
         to: toEmail,
         subject: `MilBantKar Reminder: Pending settlement for ${expenseDescription || 'an expense'}`,
@@ -68,6 +94,9 @@ const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescripti
             `Please open MilBantKar and confirm when settled.\n\n` +
             `- MilBantKar`,
     });
+
+    console.log(`✅ Reminder email sent to ${toEmail} (${info.messageId})`);
+    return { sent: true, messageId: info.messageId };
 };
 
 // Map userId -> socketId for targeted push
@@ -958,4 +987,5 @@ app.delete('/api/admin/alerts/:id', isAdmin, async (req, res) => {
 // Start server
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on http://localhost:${PORT}`);
+    verifySmtpConnection();
 });
