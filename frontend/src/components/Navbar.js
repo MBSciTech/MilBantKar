@@ -135,31 +135,37 @@ function Navbar() {
   useEffect(() => {
     if (!currentUser) return;
 
-    // Fetch existing alerts
-    fetch(`${API_BASE}/api/alerts`)
-      .then(res => {
+    const syncAlerts = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/alerts`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
+        const data = await res.json();
         const userAlerts = applyLocalSeenState(filterForCurrentUser(data, currentUser));
         setAlerts(userAlerts);
         setAlertCount(userAlerts.filter(a => !a.seen).length);
-      })
-      .catch(err => {
-        // Fallback to Render when local is down
-        fetch(`${API_FALLBACK}/api/alerts`)
-          .then(res => res.json())
-          .then(data => {
-            const userAlerts = applyLocalSeenState(filterForCurrentUser(data, currentUser));
-            setAlerts(userAlerts);
-            setAlertCount(userAlerts.filter(a => !a.seen).length);
-          })
-          .catch(e => console.error('Fetch error:', e));
-      });
+      } catch {
+        try {
+          const fallbackRes = await fetch(`${API_FALLBACK}/api/alerts`);
+          const data = await fallbackRes.json();
+          const userAlerts = applyLocalSeenState(filterForCurrentUser(data, currentUser));
+          setAlerts(userAlerts);
+          setAlertCount(userAlerts.filter(a => !a.seen).length);
+        } catch (e) {
+          console.error('Fetch error:', e);
+        }
+      }
+    };
+
+    syncAlerts();
+    // Even if socket fails on deployed infra, this keeps notifications near real-time.
+    const syncInterval = setInterval(syncAlerts, 8000);
 
     // Connect Socket.IO and register this user
-    const socket = io(API_BASE, { transports: ['websocket', 'polling'] });
+    const socket = io(API_BASE, {
+      transports: ['polling'],
+      upgrade: false,
+      reconnection: true
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -175,6 +181,7 @@ function Navbar() {
     });
 
     return () => {
+      clearInterval(syncInterval);
       socket.disconnect();
     };
   }, [currentUser]);
