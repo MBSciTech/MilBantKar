@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-const API_BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
-const API_FALLBACK = "https://milbantkar-1.onrender.com";
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "https://milbantkar-1.onrender.com";
+const API_FALLBACK = "http://localhost:5000";
 
 function History() {
   const [expenses, setExpenses] = useState([]);
@@ -63,6 +63,28 @@ function History() {
       } catch (fallbackError) {
         throw fallbackError;
       }
+    }
+  };
+
+  const postJsonWithFallback = async (path, payload) => {
+    const requestOptions = {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    };
+
+    try {
+      const primaryResponse = await fetch(`${API_BASE}${path}`, requestOptions);
+      if (!primaryResponse.ok) {
+        throw new Error(`Primary API returned ${primaryResponse.status}`);
+      }
+      return await primaryResponse.json();
+    } catch (primaryError) {
+      const fallbackResponse = await fetch(`${API_FALLBACK}${path}`, requestOptions);
+      if (!fallbackResponse.ok) {
+        throw new Error(`Fallback API returned ${fallbackResponse.status}`);
+      }
+      return await fallbackResponse.json();
     }
   };
 
@@ -289,24 +311,15 @@ function History() {
       }
       
       // Create in-app alert
-      const alertRes = await fetch(`${API_BASE}/api/alerts/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sender: userId,
-          receiver: receiver._id,
-          message: `You have a pending payment for '${exp.description}' of amount ₹${exp.amount}.`,
-          type: "info",
-          expenseDetails: exp._id
-        })
+      await postJsonWithFallback('/api/alerts/create', {
+        sender: userId,
+        receiver: receiver._id,
+        message: `You have a pending payment for '${exp.description}' of amount ₹${exp.amount}.`,
+        type: "info",
+        expenseDetails: exp._id
       });
-      
-      if (alertRes.ok) {
+
         alert(`Reminder sent to ${receiver.username}`);
-      } else {
-        const alertData = await alertRes.json().catch(() => ({}));
-        alert("Failed to send reminder: " + (alertData.message || "Unknown error"));
-      }
     } catch (err) {
       console.error("Error sending reminder:", err);
       alert("Error sending reminder. Please check your connection.");

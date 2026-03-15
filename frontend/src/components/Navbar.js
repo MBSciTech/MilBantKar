@@ -23,6 +23,9 @@ import {
   CreditCard
 } from 'lucide-react';
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onrender.com';
+const API_FALLBACK = 'http://localhost:5000';
+
 function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [alertCount, setAlertCount] = useState(0);
@@ -52,7 +55,7 @@ function Navbar() {
     
     if (!username) return;
   
-    fetch(`https://milbantkar-1.onrender.com/api/user/${username}`)
+    fetch(`${API_BASE}/api/user/${username}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
@@ -106,8 +109,6 @@ function Navbar() {
   useEffect(() => {
     if (!currentUser) return;
 
-    const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-
     // Fetch existing alerts
     fetch(`${API_BASE}/api/alerts`)
       .then(res => {
@@ -121,7 +122,7 @@ function Navbar() {
       })
       .catch(err => {
         // Fallback to Render when local is down
-        fetch('https://milbantkar-1.onrender.com/api/alerts')
+        fetch(`${API_FALLBACK}/api/alerts`)
           .then(res => res.json())
           .then(data => {
             const userAlerts = filterForCurrentUser(data, currentUser);
@@ -191,7 +192,6 @@ function Navbar() {
   };
 
   const markAlertAsSeen = async (alertId) => {
-    const API_BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
     try {
       await fetch(`${API_BASE}/api/alerts/seen/${alertId}`, {
         method: 'PUT',
@@ -216,7 +216,7 @@ function Navbar() {
     if (!currentUser) return;
     
     try {
-      const response = await fetch(`https://milbantkar-1.onrender.com/api/alerts/vote/${alertId}`, {
+      const response = await fetch(`${API_BASE}/api/alerts/vote/${alertId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
