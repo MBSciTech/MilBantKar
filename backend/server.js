@@ -3,7 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
@@ -23,54 +23,16 @@ const io = new Server(httpServer, {
 });
 const PORT = process.env.PORT || 5000;
 
-const isSmtpConfigured = Boolean(
-    process.env.SMTP_HOST &&
-    process.env.SMTP_USER &&
-    process.env.SMTP_PASS
-);
+const isSendGridConfigured = Boolean(process.env.SENDGRID_API_KEY);
 
-let smtpTransporter = null;
-
-const getSmtpTransporter = () => {
-    if (!isSmtpConfigured) return null;
-    if (smtpTransporter) return smtpTransporter;
-
-    smtpTransporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
-        }
-    });
-
-    return smtpTransporter;
-};
-
-const verifySmtpConnection = async () => {
-    const transporter = getSmtpTransporter();
-
-    if (!transporter) {
-        console.log('⚠️ SMTP is not configured. Reminder emails are disabled.');
-        return false;
-    }
-
-    try {
-        await transporter.verify();
-        console.log('✅ SMTP connection verified successfully.');
-        return true;
-    } catch (error) {
-        console.error('❌ SMTP verification failed:', error.message || error);
-        return false;
-    }
-};
+if (isSendGridConfigured) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
 
 const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescription, expenseAmount }) => {
-    const transporter = getSmtpTransporter();
-    if (!transporter) {
-        console.log('⚠️ Reminder email skipped: SMTP transporter is unavailable.');
-        return { sent: false, reason: 'smtp_not_configured' };
+    if (!isSendGridConfigured) {
+        console.log('⚠️ Reminder email skipped: SENDGRID_API_KEY is not configured.');
+        return { sent: false, reason: 'sendgrid_not_configured' };
     }
 
     if (!toEmail) {
@@ -78,11 +40,16 @@ const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescripti
         return { sent: false, reason: 'missing_receiver_email' };
     }
 
-    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
+    const fromAddress = process.env.SENDGRID_FROM_EMAIL;
+    if (!fromAddress) {
+        console.log('⚠️ Reminder email skipped: SENDGRID_FROM_EMAIL is not configured.');
+        return { sent: false, reason: 'missing_from_email' };
+    }
+
     const safeReceiver = toName || 'there';
     const safeSender = senderName || 'A user';
 
-    const info = await transporter.sendMail({
+    const [response] = await sgMail.send({
         from: fromAddress,
         to: toEmail,
         subject: `MilBantKar Reminder: Pending settlement for ${expenseDescription || 'an expense'}`,
@@ -95,8 +62,8 @@ const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescripti
             `- MilBantKar`,
     });
 
-    console.log(`✅ Reminder email sent to ${toEmail} (${info.messageId})`);
-    return { sent: true, messageId: info.messageId };
+    console.log(`✅ Reminder email sent to ${toEmail} (status ${response?.statusCode || 'unknown'})`);
+    return { sent: true, statusCode: response?.statusCode || null };
 };
 
 // Map userId -> socketId for targeted push
@@ -987,5 +954,9 @@ app.delete('/api/admin/alerts/:id', isAdmin, async (req, res) => {
 // Start server
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on http://localhost:${PORT}`);
-    verifySmtpConnection();
+    if (isSendGridConfigured) {
+        console.log('✅ SendGrid is configured for reminder emails.');
+    } else {
+        console.log('⚠️ SendGrid is not configured. Set SENDGRID_API_KEY to enable emails.');
+    }
 });
