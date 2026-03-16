@@ -956,9 +956,9 @@ app.delete('/api/admin/alerts/:id', isAdmin, async (req, res) => {
 // Start server
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on http://localhost:${PORT}`);
-    if (isSendGridConfigured) {
-        console.log('✅ SendGrid is configured for reminder emails.');
+    if (isSmtpConfigured) {
+        console.log('✅ SMTP is configured for reminder emails.');
     } else {
-        console.log('⚠️ SendGrid is not configured. Set SENDGRID_API_KEY to enable emails.');
+        console.log('⚠️ SMTP is not configured. Set SMTP_USER and SMTP_PASS to enable emails.');
     }
 });
