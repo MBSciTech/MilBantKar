@@ -3,13 +3,12 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
-// Email dependencies removed
 
 require('dotenv').config();
 
@@ -23,16 +22,24 @@ const io = new Server(httpServer, {
 });
 const PORT = process.env.PORT || 5000;
 
-const isSendGridConfigured = Boolean(process.env.SENDGRID_API_KEY);
+const isSmtpConfigured = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 
-if (isSendGridConfigured) {
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-}
+const transporter = isSmtpConfigured
+    ? nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+        },
+    })
+    : null;
 
 const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescription, expenseAmount }) => {
-    if (!isSendGridConfigured) {
-        console.log('⚠️ Reminder email skipped: SENDGRID_API_KEY is not configured.');
-        return { sent: false, reason: 'sendgrid_not_configured' };
+    if (!isSmtpConfigured || !transporter) {
+        console.log('⚠️ Reminder email skipped: SMTP not configured.');
+        return { sent: false, reason: 'smtp_not_configured' };
     }
 
     if (!toEmail) {
@@ -40,16 +47,11 @@ const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescripti
         return { sent: false, reason: 'missing_receiver_email' };
     }
 
-    const fromAddress = process.env.SENDGRID_FROM_EMAIL;
-    if (!fromAddress) {
-        console.log('⚠️ Reminder email skipped: SENDGRID_FROM_EMAIL is not configured.');
-        return { sent: false, reason: 'missing_from_email' };
-    }
-
+    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
     const safeReceiver = toName || 'there';
     const safeSender = senderName || 'A user';
 
-    const [response] = await sgMail.send({
+    const info = await transporter.sendMail({
         from: fromAddress,
         to: toEmail,
         subject: `MilBantKar Reminder: Pending settlement for ${expenseDescription || 'an expense'}`,
@@ -62,8 +64,8 @@ const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescripti
             `- MilBantKar`,
     });
 
-    console.log(`✅ Reminder email sent to ${toEmail} (status ${response?.statusCode || 'unknown'})`);
-    return { sent: true, statusCode: response?.statusCode || null };
+    console.log(`✅ Reminder email sent to ${toEmail} (messageId: ${info.messageId})`);
+    return { sent: true, messageId: info.messageId };
 };
 
 // Map userId -> socketId for targeted push
@@ -582,11 +584,7 @@ app.post('/api/alerts/create', async (req, res) => {
                     expenseAmount: populated?.expenseDetails?.amount,
                 });
             } catch (mailError) {
-                const sendGridErrors = mailError?.response?.body?.errors;
-                const detail = Array.isArray(sendGridErrors)
-                    ? sendGridErrors.map((e) => `${e.message}${e.field ? ` [${e.field}]` : ''}`).join(' | ')
-                    : (mailError.message || String(mailError));
-                console.error('⚠️ Reminder email failed (alert still created):', detail);
+                console.error('⚠️ Reminder email failed (alert still created):', mailError.message || String(mailError));
             }
         }
 
