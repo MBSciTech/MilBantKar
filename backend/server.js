@@ -582,7 +582,11 @@ app.post('/api/alerts/create', async (req, res) => {
                     expenseAmount: populated?.expenseDetails?.amount,
                 });
             } catch (mailError) {
-                console.error('⚠️ Reminder email failed (alert still created):', mailError.message || mailError);
+                const sendGridErrors = mailError?.response?.body?.errors;
+                const detail = Array.isArray(sendGridErrors)
+                    ? sendGridErrors.map((e) => `${e.message}${e.field ? ` [${e.field}]` : ''}`).join(' | ')
+                    : (mailError.message || String(mailError));
+                console.error('⚠️ Reminder email failed (alert still created):', detail);
             }
         }
 
