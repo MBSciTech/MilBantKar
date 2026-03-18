@@ -393,6 +393,8 @@ function Navbar() {
 
   }
 
+  const isLightNavbar = getPath() === 'history';
+
   // Custom styles
   const styles = `
     .modern-navbar {
@@ -616,7 +618,7 @@ function Navbar() {
       position: relative;
     }
 
-    .dropdown-menu {
+    .modern-navbar .dropdown-menu {
       position: absolute;
       top: calc(100% + 0.75rem);
       right: 0;
@@ -638,19 +640,19 @@ function Navbar() {
       overflow-y: auto;
     }
 
-    .dropdown-menu.show {
+    .modern-navbar .dropdown-menu.show {
       transform: translateY(0);
       opacity: 1;
       visibility: visible;
     }
 
-    .dropdown-header {
+    .modern-navbar .dropdown-header {
       padding: 0.75rem 1.5rem;
       border-bottom: 1px solid rgba(0, 0, 0, 0.1);
       margin-bottom: 0.5rem;
     }
 
-    .dropdown-item {
+    .modern-navbar .dropdown-item {
       display: flex;
       align-items: center;
       gap: 0.75rem;
@@ -661,13 +663,13 @@ function Navbar() {
       font-weight: 500;
     }
 
-    .dropdown-item:hover {
+    .modern-navbar .dropdown-item:hover {
       background: rgba(102, 126, 234, 0.1);
       color: #667eea;
       transform: translateX(4px);
     }
 
-    .dropdown-item.danger:hover {
+    .modern-navbar .dropdown-item.danger:hover {
       background: rgba(245, 101, 101, 0.1);
       color: #f56565;
     }
@@ -942,7 +944,7 @@ function Navbar() {
       visibility: visible;
     }
 
-    .modal-content {
+    .notification-modal .modal-content {
       background: white;
       border-radius: 16px;
       max-width: 500px;
@@ -958,7 +960,7 @@ function Navbar() {
       transform: translateY(0);
     }
 
-    .modal-header {
+    .notification-modal .modal-header {
       padding: 1.5rem;
       border-bottom: 1px solid rgba(0, 0, 0, 0.1);
       display: flex;
@@ -967,11 +969,11 @@ function Navbar() {
       gap: 1rem;
     }
 
-    .modal-body {
+    .notification-modal .modal-body {
       padding: 1.5rem;
     }
 
-    .modal-footer {
+    .notification-modal .modal-footer {
       padding: 1rem 1.5rem;
       border-top: 1px solid rgba(0, 0, 0, 0.1);
       display: flex;
@@ -1000,7 +1002,7 @@ function Navbar() {
       background: rgba(25, 135, 84, 0.1);
     }
 
-    .progress-bar {
+    .notification-modal .progress-bar {
       height: 4px;
       background: #e9ecef;
       border-radius: 2px;
@@ -1008,11 +1010,45 @@ function Navbar() {
       margin-top: 0.5rem;
     }
 
-    .progress-fill {
+    .notification-modal .progress-fill {
       height: 100%;
       background: #0d6efd;
       border-radius: 2px;
       transition: width 0.3s ease;
+    }
+
+    .modern-navbar.light-navbar {
+      background: rgba(255, 255, 255, 0.92);
+      border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .modern-navbar.light-navbar .navbar-brand,
+    .modern-navbar.light-navbar .nav-link,
+    .modern-navbar.light-navbar .notification-btn,
+    .modern-navbar.light-navbar .mobile-menu-toggle {
+      color: #0f172a;
+    }
+
+    .modern-navbar.light-navbar .nav-link {
+      background: transparent;
+    }
+
+    .modern-navbar.light-navbar .nav-link:hover,
+    .modern-navbar.light-navbar .nav-link.active {
+      background: rgba(15, 23, 42, 0.08);
+      color: #0f172a;
+    }
+
+    .modern-navbar.light-navbar .notification-btn,
+    .modern-navbar.light-navbar .mobile-menu-toggle {
+      background: rgba(15, 23, 42, 0.06);
+      border-color: rgba(15, 23, 42, 0.14);
+    }
+
+    .modern-navbar.light-navbar .profile-avatar,
+    .modern-navbar.light-navbar .profile-placeholder {
+      border-color: rgba(15, 23, 42, 0.16);
     }
   `;
 
@@ -1021,10 +1057,10 @@ function Navbar() {
       <style>{styles}</style>
       
       {/* Main Navbar */}
-      <nav className="modern-navbar">
+      <nav className={`modern-navbar ${isLightNavbar ? 'light-navbar' : ''}`}>
         <div className="navbar-content">
           {/* Brand Logo */}
-          <a href="/dashboard" className="navbar-brand" onClick={(e) => { e.preventDefault(); handleLinkClick('/dashboard'); }} style={{color:((getPath()==='login') || (getPath()==='signup') || (getPath()==='history'))?'black':'white'}}>
+          <a href="/dashboard" className="navbar-brand" onClick={(e) => { e.preventDefault(); handleLinkClick('/dashboard'); }}>
             <div className="brand-icon">
               <Wallet size={20} color="white" />
             </div>

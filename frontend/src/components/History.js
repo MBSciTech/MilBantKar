@@ -372,10 +372,6 @@ function History() {
   if (isLoading) {
     return (
       <>
-        <link 
-          href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" 
-          rel="stylesheet" 
-        />
         <style>{`
           .loading-container {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -415,16 +411,12 @@ function History() {
   return (
     <>
       <link 
-        href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" 
-        rel="stylesheet" 
-      />
-      <link 
         href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.0/font/bootstrap-icons.min.css" 
         rel="stylesheet" 
       />
       
       <style>{`
-        body {
+        .history-page {
           background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
           min-height: 100vh;
         }
@@ -768,7 +760,7 @@ function History() {
         }
       `}</style>
 
-      <div className="container-fluid" style={{background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)', minHeight: '100vh', padding: '2rem 0'}}>
+      <div className="container-fluid history-page" style={{padding: '6.5rem 0 2rem'}}>
         <div className="container">
           {/* Header Section */}
           <div className="glass-card p-5 mb-5 slide-in-top">
