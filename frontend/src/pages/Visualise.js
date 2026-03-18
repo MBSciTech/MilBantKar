@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Network } from 'vis-network/standalone';
 import { DataSet } from 'vis-data/esnext';
 import './Visualise.css';
@@ -54,33 +54,6 @@ function Visualise() {
 
     fetchData();
   }, []);
-
-  const summary = useMemo(() => {
-    const totalAmount = expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
-    const settledAmount = expenses
-      .filter((exp) => Boolean(exp.status))
-      .reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
-
-    const uniquePairs = new Set(
-      expenses
-        .map((exp) => {
-          const fromId = exp?.paidBy?._id || '';
-          const toId = exp?.paidTo?._id || '';
-          return fromId && toId ? `${fromId}->${toId}` : '';
-        })
-        .filter(Boolean)
-    );
-
-    return {
-      peopleCount: users.length,
-      transactionCount: expenses.length,
-      connectionCount: uniquePairs.size,
-      totalAmount,
-      settledAmount,
-      pendingAmount: totalAmount - settledAmount,
-      settledPct: totalAmount > 0 ? Math.round((settledAmount / totalAmount) * 100) : 0,
-    };
-  }, [users, expenses]);
 
   useEffect(() => {
     if (!networkRef.current || users.length === 0) return;
