@@ -347,7 +347,7 @@ function Visualise() {
           <div>
             <p className="viz-kicker">Flow Analytics</p>
             <h1>Expense Relationship Graph</h1>
-            <p className="viz-subtitle">See who paid whom, where settlements are pending, and how money moves across your group.</p>
+            {/* <p className="viz-subtitle">See who paid whom, where settlements are pending, and how money moves across your group.</p> */}
           </div>
 
           <div className="viz-legend-compact">
@@ -358,7 +358,7 @@ function Visualise() {
         </section>
 
         <section className="viz-stats-grid">
-          <article className="viz-stat-card">
+          {/* <article className="viz-stat-card">
             <p>People</p>
             <h4>{summary.peopleCount}</h4>
           </article>
@@ -373,7 +373,7 @@ function Visualise() {
           <article className="viz-stat-card">
             <p>Settlement Progress</p>
             <h4>{summary.settledPct}%</h4>
-          </article>
+          </article> */}
         </section>
 
         <section className="viz-canvas-shell">
