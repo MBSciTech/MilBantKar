@@ -3,7 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const sgMail = require('@sendgrid/mail');
+const webpush = require('web-push');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
@@ -22,47 +22,57 @@ const io = new Server(httpServer, {
 });
 const PORT = process.env.PORT || 5000;
 
-const isSendGridConfigured = Boolean(process.env.SENDGRID_API_KEY);
+const isWebPushConfigured = Boolean(
+    process.env.VAPID_PUBLIC_KEY &&
+    process.env.VAPID_PRIVATE_KEY &&
+    process.env.VAPID_SUBJECT
+);
 
-if (isSendGridConfigured) {
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+if (isWebPushConfigured) {
+    webpush.setVapidDetails(
+        process.env.VAPID_SUBJECT,
+        process.env.VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+    );
 }
 
-const sendReminderEmail = async ({ toEmail, toName, senderName, expenseDescription, expenseAmount }) => {
-    if (!isSendGridConfigured) {
-        console.log('⚠️ Reminder email skipped: SENDGRID_API_KEY is not configured.');
-        return { sent: false, reason: 'sendgrid_not_configured' };
+const sendWebPushToUser = async (userId, payload) => {
+    if (!isWebPushConfigured) {
+        return { sent: false, reason: 'webpush_not_configured' };
     }
 
-    if (!toEmail) {
-        console.log('⚠️ Reminder email skipped: receiver email is missing.');
-        return { sent: false, reason: 'missing_receiver_email' };
+    const user = await User.findById(userId).select('pushSubscriptions');
+    const subscriptions = user?.pushSubscriptions || [];
+
+    if (!subscriptions.length) {
+        return { sent: false, reason: 'no_subscriptions' };
     }
 
-    const fromAddress = process.env.SENDGRID_FROM_EMAIL;
-    if (!fromAddress) {
-        console.log('⚠️ Reminder email skipped: SENDGRID_FROM_EMAIL is not configured.');
-        return { sent: false, reason: 'missing_from_email' };
+    const invalidEndpoints = [];
+    let sentCount = 0;
+    const message = JSON.stringify(payload);
+
+    for (const sub of subscriptions) {
+        try {
+            await webpush.sendNotification(sub, message);
+            sentCount += 1;
+        } catch (err) {
+            const statusCode = err?.statusCode;
+            if (statusCode === 404 || statusCode === 410) {
+                invalidEndpoints.push(sub.endpoint);
+            } else {
+                console.error('⚠️ Web push send failed:', err.message || String(err));
+            }
+        }
     }
 
-    const safeReceiver = toName || 'there';
-    const safeSender = senderName || 'A user';
+    if (invalidEndpoints.length) {
+        await User.findByIdAndUpdate(userId, {
+            $pull: { pushSubscriptions: { endpoint: { $in: invalidEndpoints } } }
+        });
+    }
 
-    const [response] = await sgMail.send({
-        from: fromAddress,
-        to: toEmail,
-        subject: `MilBantKar Reminder: Pending settlement for ${expenseDescription || 'an expense'}`,
-        text:
-            `Hi ${safeReceiver},\n\n` +
-            `${safeSender} sent you a settlement reminder.\n` +
-            `Expense: ${expenseDescription || 'N/A'}\n` +
-            `Amount: ₹${expenseAmount || 0}\n\n` +
-            `Please open MilBantKar and confirm when settled.\n\n` +
-            `- MilBantKar`,
-    });
-
-    console.log(`✅ Reminder email sent to ${toEmail} (status ${response?.statusCode || 'unknown'})`);
-    return { sent: true, statusCode: response?.statusCode || null };
+    return { sent: sentCount > 0, sentCount };
 };
 
 // Map userId -> socketId for targeted push
@@ -222,6 +232,73 @@ app.get('/api/users', async (req, res) => {
         res.json(users);  
     } catch (error) {
         console.error('Failed to fetch all users', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.get('/api/push/public-key', (req, res) => {
+    if (!process.env.VAPID_PUBLIC_KEY) {
+        return res.status(503).json({ message: 'VAPID public key is not configured' });
+    }
+    res.status(200).json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+    try {
+        const { userId, subscription } = req.body;
+        if (!userId || !subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+            return res.status(400).json({ message: 'userId and valid subscription are required' });
+        }
+
+        await User.findByIdAndUpdate(
+            userId,
+            {
+                $pull: { pushSubscriptions: { endpoint: subscription.endpoint } }
+            },
+            { new: true }
+        );
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            {
+                $push: { pushSubscriptions: subscription }
+            },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'Push subscription saved' });
+    } catch (error) {
+        console.error('❌ Error saving push subscription:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.post('/api/push/unsubscribe', async (req, res) => {
+    try {
+        const { userId, endpoint } = req.body;
+        if (!userId || !endpoint) {
+            return res.status(400).json({ message: 'userId and endpoint are required' });
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            {
+                $pull: { pushSubscriptions: { endpoint } }
+            },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'Push subscription removed' });
+    } catch (error) {
+        console.error('❌ Error removing push subscription:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });
@@ -568,20 +645,22 @@ app.post('/api/alerts/create', async (req, res) => {
             }
         }
 
-        // Optional email reminder for receiver (does not fail alert creation on SMTP errors).
+        // Push reminder to receiver devices, including service-worker notifications when tabs are closed.
         if (type === 'info' && receiver) {
             try {
-                const receiverUser = await User.findById(receiver).select('email username');
                 const senderName = populated?.sender?.username || 'A user';
-                await sendReminderEmail({
-                    toEmail: receiverUser?.email,
-                    toName: receiverUser?.username,
-                    senderName,
-                    expenseDescription: populated?.expenseDetails?.description,
-                    expenseAmount: populated?.expenseDetails?.amount,
+                const pushResult = await sendWebPushToUser(receiver, {
+                    title: 'MilBantKar Reminder',
+                    body: `${senderName} sent you a settlement reminder for ${populated?.expenseDetails?.description || 'an expense'} (₹${populated?.expenseDetails?.amount || 0}).`,
+                    url: '/history',
+                    alertId: String(populated?._id || ''),
                 });
+
+                if (!pushResult.sent) {
+                    console.log('ℹ️ Push not delivered for reminder:', pushResult.reason || 'unknown_reason');
+                }
             } catch (mailError) {
-                console.error('⚠️ Reminder email failed (alert still created):', mailError.message || String(mailError));
+                console.error('⚠️ Reminder push failed (alert still created):', mailError.message || String(mailError));
             }
         }
 
@@ -592,9 +671,6 @@ app.post('/api/alerts/create', async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 });
-
-
-// Email functionality removed
 
 // Get all alerts
 app.get('/api/alerts', async (req, res) => {
@@ -953,9 +1029,9 @@ app.delete('/api/admin/alerts/:id', isAdmin, async (req, res) => {
 // Start server
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on http://localhost:${PORT}`);
-    if (isSendGridConfigured) {
-        console.log('✅ SendGrid is configured for reminder emails.');
+    if (isWebPushConfigured) {
+        console.log('✅ Web Push is configured for reminder notifications.');
     } else {
-        console.log('⚠️ SendGrid is not configured. Set SENDGRID_API_KEY to enable emails.');
+        console.log('⚠️ Web Push is not configured. Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT.');
     }
 });

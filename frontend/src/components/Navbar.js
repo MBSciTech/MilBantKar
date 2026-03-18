@@ -27,6 +27,13 @@ const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onr
 const API_FALLBACK = 'http://localhost:5000';
 const SEEN_ALERTS_STORAGE_KEY = 'seenAlertIds';
 
+const urlBase64ToUint8Array = (base64String) => {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+};
+
 const getSeenAlertIds = () => {
   try {
     const raw = localStorage.getItem(SEEN_ALERTS_STORAGE_KEY);
@@ -184,6 +191,64 @@ function Navbar() {
       clearInterval(syncInterval);
       socket.disconnect();
     };
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser?._id) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    const subscribePush = async () => {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        const registration = await navigator.serviceWorker.register('/push-sw.js');
+
+        let keyRes;
+        try {
+          keyRes = await fetch(`${API_BASE}/api/push/public-key`);
+          if (!keyRes.ok) throw new Error('Primary API failed');
+        } catch {
+          keyRes = await fetch(`${API_FALLBACK}/api/push/public-key`);
+          if (!keyRes.ok) return;
+        }
+
+        const { publicKey } = await keyRes.json();
+        if (!publicKey) return;
+
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+        }
+
+        const payload = JSON.stringify({
+          userId: currentUser._id,
+          subscription,
+        });
+
+        try {
+          const subRes = await fetch(`${API_BASE}/api/push/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+          });
+          if (!subRes.ok) throw new Error('Primary subscribe failed');
+        } catch {
+          await fetch(`${API_FALLBACK}/api/push/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+          });
+        }
+      } catch (err) {
+        console.error('Push subscription failed:', err);
+      }
+    };
+
+    subscribePush();
   }, [currentUser]);
 
   const navigationItems = [

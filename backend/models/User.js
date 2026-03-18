@@ -37,6 +37,16 @@ const userSchema = new mongoose.Schema(
       owedToOthers: { type: Number, default: 0 }, // Positive → owes others
       owedByOthers: { type: Number, default: 0 }  // Positive → others owe them
     },
+
+    pushSubscriptions: [
+      {
+        endpoint: { type: String },
+        keys: {
+          p256dh: { type: String },
+          auth: { type: String }
+        }
+      }
+    ],
     
   },
   {
