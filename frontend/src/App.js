@@ -14,6 +14,7 @@ import EventPage from './components/EventPage';
 import Visualise from './pages/Visualise';
 import AdminPanel from './pages/AdminPanel';
 import Help from './pages/Help';
+import SettingsPage from './pages/SettingsPage';
 import QRScanner from './components/QRScanner';
 
 function AppLayout() {
@@ -39,6 +40,7 @@ function AppLayout() {
           <Route path='/visualise' element={<Visualise/>}/>
           <Route path='/admin' element={<AdminPanel/>}/>
           <Route path='/help' element={<Help/>}/>
+          <Route path='/settings' element={<SettingsPage/>}/>
           <Route path='/scanner' element={<QRScanner/>}/>
         </Routes>
       </main>
