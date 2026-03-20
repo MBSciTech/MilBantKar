@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import './EventPage.css';
 
 // Import QRCode component
 import QRCode from 'react-qr-code';
+import { io } from 'socket.io-client';
+
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onrender.com';
+const API_FALLBACK = 'http://localhost:5000';
 
 function EventPage() {
     const { eventId } = useParams();
@@ -39,6 +43,11 @@ function EventPage() {
 
     // QR Code state
     const [showQRCode, setShowQRCode] = useState(false);
+
+    // Socket and Real-time states
+    const socketRef = useRef(null);
+    const [sendingReminder, setSendingReminder] = useState(false);
+    const [remindingUserId, setRemindingUserId] = useState(null);
 
     // Expense categories
     const categories = [
@@ -202,6 +211,33 @@ function EventPage() {
         fetchEventDetails();
     }, [fetchEventDetails]);
 
+    // Socket.IO setup for real-time settlement and reminder updates
+    useEffect(() => {
+        const newSocket = io(API_BASE, {
+            transports: ['polling'],
+            upgrade: false,
+            reconnection: true
+        });
+
+        newSocket.on('settlement-updated', (data) => {
+            if (data.eventId === eventId) {
+                fetchEventDetails();
+                showNotification(`${data.fromUser} and ${data.toUser} marked settlement as updated`, 'success');
+            }
+        });
+
+        newSocket.on('reminder-sent', (data) => {
+            if (data.eventId === eventId) {
+                showNotification(`Reminder sent to ${data.toUsername}!`, 'success');
+            }
+        });
+
+        socketRef.current = newSocket;
+
+        return () => {
+            newSocket.disconnect();
+        };
+    }, [eventId]);
 
     const handleParticipantSelect = (participant) => {
         if (selectedParticipants.some(p => p._id === participant._id)) {
@@ -473,6 +509,88 @@ function EventPage() {
             
             img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
             showNotification('QR Code downloaded successfully!', 'success');
+        }
+    };
+
+    const handleSettlementMarked = async (settlement) => {
+        try {
+            const response = await fetch(`${API_BASE}/api/expense/${settlement.expenseId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: true })
+            }).catch(() =>
+                fetch(`${API_FALLBACK}/api/expense/${settlement.expenseId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: true })
+                })
+            );
+
+            if (response.ok) {
+                // Emit Socket.IO event for real-time update
+                if (socketRef.current) {
+                    socketRef.current.emit('settlement-marked', {
+                        eventId,
+                        settlement
+                    });
+                }
+
+                await fetchEventDetails();
+                showNotification('Settlement marked as complete and synced!', 'success');
+            }
+        } catch (err) {
+            showNotification('Failed to mark settlement', 'error');
+            console.error(err);
+        }
+    };
+
+    const handleSendReminder = async (settlement) => {
+        setSendingReminder(true);
+        setRemindingUserId(settlement.to);
+
+        try {
+            const response = await fetch(`${API_BASE}/api/alerts/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    receiver: settlement.toId,
+                    type: 'settlement-reminder',
+                    title: `Settlement Reminder from ${settlement.from}`,
+                    message: `${settlement.from} is reminding you to pay ₹${settlement.amount}`,
+                    eventId
+                })
+            }).catch(() =>
+                fetch(`${API_FALLBACK}/api/alerts/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        receiver: settlement.toId,
+                        type: 'settlement-reminder',
+                        title: `Settlement Reminder from ${settlement.from}`,
+                        message: `${settlement.from} is reminding you to pay ₹${settlement.amount}`,
+                        eventId
+                    })
+                })
+            );
+
+            if (response.ok) {
+                // Emit Socket.IO event for real-time update
+                if (socketRef.current) {
+                    socketRef.current.emit('reminder-sent-event', {
+                        eventId,
+                        toUsername: settlement.to,
+                        fromUsername: settlement.from
+                    });
+                }
+
+                showNotification(`Reminder sent to ${settlement.to}!`, 'success');
+            }
+        } catch (err) {
+            showNotification('Failed to send reminder', 'error');
+            console.error(err);
+        } finally {
+            setSendingReminder(false);
+            setRemindingUserId(null);
         }
     };
 
@@ -1356,9 +1474,24 @@ function EventPage() {
                                         </div>
                                         
                                         <div className="settlement-actions">
-                                            <button className="btn-settlement-done">
+                                            <button 
+                                                className="btn-settlement-done"
+                                                onClick={() => handleSettlementMarked(settlements[0])}
+                                                disabled={processingSettlement}
+                                            >
                                                 <i className="fas fa-check"></i>
                                                 Mark as Settled
+                                            </button>
+                                            <button 
+                                                className="btn-send-reminder"
+                                                onClick={() => handleSendReminder(settlements[0])}
+                                                disabled={sendingReminder || remindingUserId === settlements[0].toId}
+                                            >
+                                                {sendingReminder && remindingUserId === settlements[0].toId ? (
+                                                    <><span className="spinner-small"></span> Sending...</>
+                                                ) : (
+                                                    <><i className="fas fa-bell"></i> Send Reminder</>
+                                                )}
                                             </button>
                                         </div>
                                     </div>

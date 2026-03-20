@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || "https://milbantkar-1.onrender.com";
 const API_FALLBACK = "http://localhost:5000";
@@ -14,8 +15,10 @@ function History() {
   const [isLoading, setIsLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(null);
+  const [sendingReminder, setSendingReminder] = useState(null);
   const [userId, setUserId] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const socketRef = useRef(null);
 
   const getUserRefId = (userRef) => {
     if (!userRef) return "";
@@ -125,6 +128,43 @@ function History() {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!userId) return undefined;
+
+    const socket = io(API_BASE, {
+      transports: ["polling"],
+      upgrade: false,
+      reconnection: true,
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      socket.emit("register", userId);
+    });
+
+    socket.on("expense-status-updated", (updatedExpense) => {
+      if (!updatedExpense?._id) return;
+      setExpenses((prev) =>
+        prev.map((exp) =>
+          exp._id === updatedExpense._id ? mergeExpenseUsers(exp, updatedExpense) : exp
+        )
+      );
+    });
+
+    socket.on("new-notification", (alert) => {
+      if (alert?.type === "info") {
+        const senderName = alert?.sender?.username || "Someone";
+        setStatusMessage(`${senderName} sent a reminder.`);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [userId]);
 
   // Filter and sort expenses
   useEffect(() => {
@@ -245,7 +285,7 @@ function History() {
   };
 
   const canSendReminder = (expense) => {
-    return !getSettlementState(expense).status && expense?.paidBy?._id === userId;
+    return !getSettlementState(expense).status && getUserRefId(expense?.paidBy) === userId;
   };
 
   // Toggle settlement confirmation with API call
@@ -298,6 +338,8 @@ function History() {
       alert("User info not loaded. Please try again.");
       return;
     }
+
+    setSendingReminder(exp._id);
     
     try {
       // Get receiver user details
@@ -319,10 +361,12 @@ function History() {
         expenseDetails: exp._id
       });
 
-        alert(`Reminder sent to ${receiver.username}`);
+      setStatusMessage(`Reminder sent to ${receiver.username}`);
     } catch (err) {
       console.error("Error sending reminder:", err);
       alert("Error sending reminder. Please check your connection.");
+    } finally {
+      setSendingReminder(null);
     }
   };
 
@@ -611,6 +655,33 @@ function History() {
         .loading-button .spinner-border {
           width: 1rem;
           height: 1rem;
+        }
+
+        .reminder-sending {
+          position: relative;
+          pointer-events: none;
+          animation: reminderPulse 1.1s ease-in-out infinite;
+        }
+
+        .reminder-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          display: inline-block;
+          background: currentColor;
+          margin-right: 0.35rem;
+          animation: reminderBlink 0.8s ease-in-out infinite;
+        }
+
+        @keyframes reminderPulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.03); }
+          100% { transform: scale(1); }
+        }
+
+        @keyframes reminderBlink {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 1; }
         }
 
         .settlement-panel {
@@ -1076,13 +1147,22 @@ function History() {
                                 )}
                               </button>
                               <button
-                                className="btn btn-outline-info btn-enhanced btn-sm"
+                                className={`btn btn-outline-info btn-enhanced btn-sm ${sendingReminder === exp._id ? 'reminder-sending' : ''}`}
                                 onClick={() => sendReminder(exp)}
-                                disabled={!canSendReminder(exp)}
+                                disabled={!canSendReminder(exp) || sendingReminder === exp._id}
                                 title={canSendReminder(exp) ? 'Send Reminder' : 'Only the payer can remind while settlement is pending'}
                               >
-                                <i className="bi bi-bell me-1"></i>
-                                Remind
+                                {sendingReminder === exp._id ? (
+                                  <>
+                                    <span className="reminder-dot"></span>
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>
+                                    <i className="bi bi-bell me-1"></i>
+                                    Remind
+                                  </>
+                                )}
                               </button>
                             </div>
                           </td>
@@ -1202,13 +1282,22 @@ function History() {
                         )}
                       </button>
                       <button
-                        className="btn btn-outline-info btn-enhanced btn-sm flex-fill"
+                        className={`btn btn-outline-info btn-enhanced btn-sm flex-fill ${sendingReminder === exp._id ? 'reminder-sending' : ''}`}
                         onClick={() => sendReminder(exp)}
-                        disabled={!canSendReminder(exp)}
+                        disabled={!canSendReminder(exp) || sendingReminder === exp._id}
                         title={canSendReminder(exp) ? 'Send Reminder' : 'Only the payer can remind while settlement is pending'}
                       >
-                        <i className="bi bi-bell me-1"></i>
-                        Remind
+                        {sendingReminder === exp._id ? (
+                          <>
+                            <span className="reminder-dot"></span>
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <i className="bi bi-bell me-1"></i>
+                            Remind
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

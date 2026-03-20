@@ -475,6 +475,17 @@ app.put('/api/expense/status/:id', async (req, res) => {
             .populate('paidBy', 'username _id')
             .populate('paidTo', 'username _id');
 
+        const paidBySocketId = userSockets.get(String(updatedExpense.paidBy?._id || ''));
+        const paidToSocketId = userSockets.get(String(updatedExpense.paidTo?._id || ''));
+
+        if (paidBySocketId) {
+            io.to(paidBySocketId).emit('expense-status-updated', updatedExpense);
+        }
+
+        if (paidToSocketId && paidToSocketId !== paidBySocketId) {
+            io.to(paidToSocketId).emit('expense-status-updated', updatedExpense);
+        }
+
         res.json({
             ...updatedExpense.toObject(),
             status: updatedExpense.settlementConfirmation.paidByConfirmed && updatedExpense.settlementConfirmation.paidToConfirmed
