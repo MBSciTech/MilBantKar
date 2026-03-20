@@ -205,7 +205,7 @@ function EventPage() {
         } finally {
             setLoading(false);
         }
-    }, [eventId, fetchEventDetails]);
+    }, [eventId]);
 
     useEffect(() => {
         fetchEventDetails();
@@ -237,7 +237,7 @@ function EventPage() {
         return () => {
             newSocket.disconnect();
         };
-    }, [eventId]);
+    }, [eventId, fetchEventDetails]);
 
     const handleParticipantSelect = (participant) => {
         if (selectedParticipants.some(p => p._id === participant._id)) {
