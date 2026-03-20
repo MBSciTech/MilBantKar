@@ -205,7 +205,7 @@ function EventPage() {
         } finally {
             setLoading(false);
         }
-    }, [eventId]);
+    }, [eventId, fetchEventDetails]);
 
     useEffect(() => {
         fetchEventDetails();
