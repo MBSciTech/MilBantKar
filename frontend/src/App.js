@@ -16,6 +16,7 @@ import AdminPanel from './pages/AdminPanel';
 import Help from './pages/Help';
 import SettingsPage from './pages/SettingsPage';
 import QRScanner from './components/QRScanner';
+import Calculate from './pages/Calculate';
 
 function AppLayout() {
   const location = useLocation();
@@ -42,6 +43,7 @@ function AppLayout() {
           <Route path='/help' element={<Help/>}/>
           <Route path='/settings' element={<SettingsPage/>}/>
           <Route path='/scanner' element={<QRScanner/>}/>
+          <Route path='/calculate' element={<Calculate/>}/>
         </Routes>
       </main>
 

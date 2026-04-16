@@ -20,7 +20,8 @@ import {
   AlertTriangle,
   Info,
   Vote,
-  CreditCard
+  CreditCard,
+  Calculator
 } from 'lucide-react';
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onrender.com';
@@ -255,7 +256,8 @@ function Navbar() {
     { path: "/dashboard", label: "Dashboard", icon: Home, active: false },
     { path: "/history", label: "History", icon: FileText, active: false },
     { path: "/events", label: "Events", icon: Calendar, active: false },
-    { path: "/visualise", label: "Visualise", icon: TrendingUp, active: false}
+    { path: "/visualise", label: "Visualise", icon: TrendingUp, active: false},
+    { path: "/calculate", label: "Calculate", icon: Calculator, active: false }
   ];
 
   const handleLinkClick = (path) => {
