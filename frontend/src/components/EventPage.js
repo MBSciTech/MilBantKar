@@ -22,6 +22,8 @@ function EventPage() {
         paidTo: [],
         splitType: 'equal'
     });
+    const [expenseInputMode, setExpenseInputMode] = useState('manual');
+    const [bulkExpenseText, setBulkExpenseText] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [selectedParticipants, setSelectedParticipants] = useState([]);
     
@@ -247,6 +249,90 @@ function EventPage() {
         }
     };
 
+    const normalizeName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '');
+
+    const resolveParticipantFromText = (nameText) => {
+        const participants = event?.participants || [];
+        const normalizedInput = normalizeName(nameText);
+        if (!normalizedInput) return null;
+
+        const exactMatch = participants.find((participant) => normalizeName(participant.username) === normalizedInput);
+        if (exactMatch) return exactMatch;
+
+        const partialMatch = participants.find((participant) => {
+            const normalizedUsername = normalizeName(participant.username);
+            return normalizedUsername.includes(normalizedInput) || normalizedInput.includes(normalizedUsername);
+        });
+
+        return partialMatch || null;
+    };
+
+    const parseBulkExpenseText = (text) => {
+        const lines = String(text || '')
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        const parsedEntries = [];
+        const errors = [];
+
+        lines.forEach((line, index) => {
+            const lineNo = index + 1;
+            const match = line.match(/^(.+?)\s*:\s*([0-9]+(?:\.[0-9]{1,2})?)\s*(?:\(([^)]*)\))?\s*$/);
+
+            if (!match) {
+                errors.push(`Line ${lineNo}: invalid format. Use Name: Amount (optional description)`);
+                return;
+            }
+
+            const rawName = match[1]?.trim();
+            const rawAmount = match[2]?.trim();
+            const rawDescription = match[3]?.trim();
+
+            const participant = resolveParticipantFromText(rawName);
+            if (!participant) {
+                errors.push(`Line ${lineNo}: user '${rawName}' not found in this event`);
+                return;
+            }
+
+            const amount = Number(rawAmount);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                errors.push(`Line ${lineNo}: invalid amount '${rawAmount}'`);
+                return;
+            }
+
+            parsedEntries.push({
+                paidTo: participant,
+                amount,
+                description: rawDescription || 'No description'
+            });
+        });
+
+        return { parsedEntries, errors };
+    };
+
+    const postExpense = async (payload) => {
+        try {
+            const response = await fetch(`${API_BASE}/api/expense/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response;
+        } catch {
+            const fallbackResponse = await fetch(`${API_FALLBACK}/api/expense/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!fallbackResponse.ok) throw new Error(`HTTP error! status: ${fallbackResponse.status}`);
+            return fallbackResponse;
+        }
+    };
+
     const handleAddExpense = async (e) => {
         e.preventDefault();
         if (!expenseForm.amount || selectedParticipants.length === 0) {
@@ -277,23 +363,17 @@ function EventPage() {
             const amountPerPerson = parseFloat(expenseForm.amount) / selectedParticipants.length;
             
             const expensePromises = selectedParticipants.map(participant => 
-                fetch('https://milbantkar-1.onrender.com/api/expense/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        paidBy: currentUserId,
-                        paidTo: participant._id,
-                        amount: amountPerPerson,
-                        description: expenseForm.description || 'No description',
-                        date: new Date(),
-                        eventId
-                    })
+                postExpense({
+                    paidBy: currentUserId,
+                    paidTo: participant._id,
+                    amount: amountPerPerson,
+                    description: expenseForm.description || 'No description',
+                    date: new Date(),
+                    eventId
                 }).then(async response => {
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    
                     try {
-                    const contentType = response.headers.get('content-type');
-                    if (contentType && contentType.includes('application/json')) {
+                        const contentType = response.headers.get('content-type');
+                        if (contentType && contentType.includes('application/json')) {
                             return await response.json();
                         }
                         return { success: true, status: response.status };
@@ -317,6 +397,70 @@ function EventPage() {
         } catch (err) {
             console.error('Error adding expenses:', err);
             showNotification('Failed to add expenses. Please try again.', 'error');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleAddExpenseFromText = async (e) => {
+        e.preventDefault();
+
+        if (!bulkExpenseText.trim()) {
+            showNotification('Please enter expense text lines', 'error');
+            return;
+        }
+
+        let currentUserId;
+        const userIdFromStorage = localStorage.getItem('userId');
+        if (!userIdFromStorage) {
+            showNotification('User session error. Please log in again.', 'error');
+            return;
+        }
+
+        const trimmedUserId = userIdFromStorage.trim();
+        if (trimmedUserId.startsWith('"') || trimmedUserId.startsWith('{') || trimmedUserId.startsWith('[')) {
+            try {
+                currentUserId = JSON.parse(trimmedUserId);
+            } catch {
+                currentUserId = userIdFromStorage;
+            }
+        } else {
+            currentUserId = userIdFromStorage;
+        }
+
+        const { parsedEntries, errors } = parseBulkExpenseText(bulkExpenseText);
+
+        if (errors.length > 0) {
+            const shownErrors = errors.slice(0, 4).join(' | ');
+            const more = errors.length > 4 ? ` (+${errors.length - 4} more)` : '';
+            showNotification(`${shownErrors}${more}`, 'error');
+            return;
+        }
+
+        if (!parsedEntries.length) {
+            showNotification('No valid expense lines found', 'error');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await Promise.all(parsedEntries.map((entry) => postExpense({
+                paidBy: currentUserId,
+                paidTo: entry.paidTo._id,
+                amount: entry.amount,
+                description: entry.description,
+                date: new Date(),
+                eventId
+            })));
+
+            setBulkExpenseText('');
+            setShowAddExpense(false);
+            setExpenseInputMode('manual');
+            await fetchEventDetails();
+            showNotification(`Added ${parsedEntries.length} expenses successfully (INR)`, 'success');
+        } catch (err) {
+            console.error('Error adding bulk expenses:', err);
+            showNotification('Failed to add one or more expense entries', 'error');
         } finally {
             setSubmitting(false);
         }
@@ -1084,18 +1228,33 @@ function EventPage() {
                         {showAddExpense && (
                             <div className="card-modern expense-form-card">
                                 <div className="card-header-modern green">
-                                    <h5>
-                                        <i className="fas fa-plus-circle"></i>
-                                        Add New Expense
-                                    </h5>
-                                    <button 
+                                    <div className="expense-form-header-left">
+                                        <h5>
+                                            <i className="fas fa-plus-circle"></i>
+                                            Add New Expense
+                                        </h5>
+                                        <button
+                                            type="button"
+                                            className={`btn-input-mode ${expenseInputMode === 'bulk' ? 'active' : ''}`}
+                                            onClick={() => setExpenseInputMode(expenseInputMode === 'manual' ? 'bulk' : 'manual')}
+                                            title="Switch to text input"
+                                        >
+                                            <i className="fas fa-align-left"></i>
+                                            {expenseInputMode === 'manual' ? 'Add From Text' : 'Manual Input'}
+                                        </button>
+                                    </div>
+                                    <button
                                         className="btn-close-modern"
-                                        onClick={() => setShowAddExpense(false)}
+                                        onClick={() => {
+                                            setShowAddExpense(false);
+                                            setExpenseInputMode('manual');
+                                        }}
                                     >
                                         <i className="fas fa-times"></i>
                                     </button>
                                 </div>
-                                
+
+                                {expenseInputMode === 'manual' ? (
                                 <form onSubmit={handleAddExpense} className="expense-form">
                                     {/* Quick Amount Selection */}
                                     <div className="form-group-modern">
@@ -1209,6 +1368,47 @@ function EventPage() {
                                         </button>
                                     </div>
                                 </form>
+                                ) : (
+                                <form onSubmit={handleAddExpenseFromText} className="expense-form">
+                                    <div className="form-group-modern">
+                                        <label className="form-label-modern">Expense Text (INR)</label>
+                                        <p className="bulk-expense-hint">
+                                            Format: Name: Amount (optional description)
+                                        </p>
+                                        <textarea
+                                            className="description-input bulk-expense-input"
+                                            rows="8"
+                                            placeholder={'Pratham : 50 (juice)\nRoshan : 100\nMaharshi : 20 (Soda)'}
+                                            value={bulkExpenseText}
+                                            onChange={(e) => setBulkExpenseText(e.target.value)}
+                                            required
+                                        />
+                                        <p className="bulk-expense-note">
+                                            Each line creates one expense where you pay that participant in INR. If text is inside (), it is used as description for that line.
+                                        </p>
+                                    </div>
+
+                                    <div className="form-actions">
+                                        <button
+                                            type="submit"
+                                            className="btn-submit"
+                                            disabled={submitting || !bulkExpenseText.trim()}
+                                        >
+                                            {submitting ? (
+                                                <>
+                                                    <div className="submit-spinner"></div>
+                                                    <span>Adding Expenses...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fas fa-file-import"></i>
+                                                    <span>Add All From Text</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </form>
+                                )}
                             </div>
                         )}
 
