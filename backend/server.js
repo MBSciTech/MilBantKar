@@ -648,8 +648,11 @@ app.post('/api/alerts/create', async (req, res) => {
                 ]
             });
 
-        // Push to receiver in real time if they are connected
-        if (receiver) {
+        // Push notifications in real time.
+        // Polls are broadcast to everyone, while reminders/alerts can be targeted.
+        if (type === 'poll' && !receiver) {
+            io.emit('new-notification', populated);
+        } else if (receiver) {
             const receiverSocketId = userSockets.get(String(receiver));
             if (receiverSocketId) {
                 io.to(receiverSocketId).emit('new-notification', populated);
@@ -728,7 +731,27 @@ app.post('/api/alerts/vote/:alertId', async (req, res) => {
         }
 
         await alert.save();
-        res.status(200).json({ message: "Vote recorded", alert });
+
+        const populatedAlert = await Alert.findById(alertId)
+            .populate('sender', 'username')
+            .populate('receiver', 'username')
+            .populate('pollOptions.votes', 'username');
+
+        if (alert.receiver) {
+            const receiverSocketId = userSockets.get(String(alert.receiver));
+            if (receiverSocketId) {
+                io.to(receiverSocketId).emit('poll-updated', populatedAlert);
+            }
+
+            const voterSocketId = userSockets.get(String(userId));
+            if (voterSocketId && voterSocketId !== receiverSocketId) {
+                io.to(voterSocketId).emit('poll-updated', populatedAlert);
+            }
+        } else {
+            io.emit('poll-updated', populatedAlert);
+        }
+
+        res.status(200).json({ message: "Vote recorded", alert: populatedAlert });
 
     } catch (error) {
         console.error("❌ Error voting in poll:", error);
@@ -1034,6 +1057,90 @@ app.delete('/api/admin/alerts/:id', isAdmin, async (req, res) => {
     } catch (error) {
         console.error("❌ Error deleting alert:", error);
         res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Get all polls
+app.get('/api/admin/polls', isAdmin, async (req, res) => {
+    try {
+        const polls = await Alert.find({ type: 'poll' })
+            .populate('sender', 'username')
+            .populate('receiver', 'username')
+            .populate('pollOptions.votes', 'username')
+            .sort({ createdAt: -1 });
+
+        res.status(200).json(polls);
+    } catch (error) {
+        console.error('❌ Error fetching admin polls:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Admin: Create a poll
+app.post('/api/admin/polls', isAdmin, async (req, res) => {
+    try {
+        const { message, pollOptions, receiver } = req.body;
+
+        if (!message || !Array.isArray(pollOptions) || pollOptions.length < 2) {
+            return res.status(400).json({ message: 'Message and at least 2 poll options are required' });
+        }
+
+        const sanitizedOptions = pollOptions
+            .map(option => String(option || '').trim())
+            .filter(option => option.length > 0)
+            .slice(0, 6)
+            .map(option => ({ option, votes: [] }));
+
+        if (sanitizedOptions.length < 2) {
+            return res.status(400).json({ message: 'At least 2 valid poll options are required' });
+        }
+
+        const newPoll = new Alert({
+            sender: req.adminUser._id,
+            receiver: receiver || undefined,
+            message,
+            type: 'poll',
+            pollOptions: sanitizedOptions,
+            seen: false
+        });
+
+        await newPoll.save();
+
+        const populatedPoll = await Alert.findById(newPoll._id)
+            .populate('sender', 'username')
+            .populate('receiver', 'username')
+            .populate('pollOptions.votes', 'username');
+
+        if (receiver) {
+            const receiverSocketId = userSockets.get(String(receiver));
+            if (receiverSocketId) {
+                io.to(receiverSocketId).emit('new-notification', populatedPoll);
+            }
+        } else {
+            io.emit('new-notification', populatedPoll);
+        }
+
+        res.status(201).json({ message: 'Poll created successfully', poll: populatedPoll });
+    } catch (error) {
+        console.error('❌ Error creating admin poll:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Admin: Delete a poll
+app.delete('/api/admin/polls/:id', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deletedPoll = await Alert.findOneAndDelete({ _id: id, type: 'poll' });
+        if (!deletedPoll) {
+            return res.status(404).json({ message: 'Poll not found' });
+        }
+
+        io.emit('poll-deleted', { pollId: id });
+        res.status(200).json({ message: 'Poll deleted successfully' });
+    } catch (error) {
+        console.error('❌ Error deleting admin poll:', error);
+        res.status(500).json({ message: 'Server error' });
     }
 });
   

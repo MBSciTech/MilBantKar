@@ -188,6 +188,30 @@ function Navbar() {
       }
     });
 
+    socket.on('poll-updated', (updatedPoll) => {
+      setAlerts(prev => prev.map(alert => (
+        alert._id === updatedPoll._id ? { ...updatedPoll, seen: alert.seen } : alert
+      )));
+      setSelectedAlert(prev => (prev && prev._id === updatedPoll._id ? updatedPoll : prev));
+    });
+
+    socket.on('poll-deleted', ({ pollId }) => {
+      setAlerts(prev => {
+        const removed = prev.find(alert => alert._id === pollId);
+        if (removed && !removed.seen) {
+          setAlertCount(count => Math.max(0, count - 1));
+        }
+        return prev.filter(alert => alert._id !== pollId);
+      });
+      setSelectedAlert(prev => {
+        if (prev && prev._id === pollId) {
+          setIsModalOpen(false);
+          return null;
+        }
+        return prev;
+      });
+    });
+
     return () => {
       clearInterval(syncInterval);
       socket.disconnect();

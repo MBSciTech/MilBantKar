@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import './AdminPanel.css';
 
+const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onrender.com';
+
 function AdminPanel() {
     const [activeTab, setActiveTab] = useState('users');
     const [users, setUsers] = useState([]);
     const [events, setEvents] = useState([]);
     const [expenses, setExpenses] = useState([]);
     const [alerts, setAlerts] = useState([]);
+    const [polls, setPolls] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -15,6 +18,7 @@ function AdminPanel() {
     // Form states
     const [showUserForm, setShowUserForm] = useState(false);
     const [showEventForm, setShowEventForm] = useState(false);
+    const [showPollForm, setShowPollForm] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [userForm, setUserForm] = useState({
         username: '',
@@ -29,6 +33,11 @@ function AdminPanel() {
         description: '',
         createdBy: '',
         isClosed: false
+    });
+    const [pollForm, setPollForm] = useState({
+        message: '',
+        receiver: '',
+        options: ['', '']
     });
 
     useEffect(() => {
@@ -50,11 +59,12 @@ function AdminPanel() {
                 'adminusername': adminUsername
             };
 
-            const [usersRes, eventsRes, expensesRes, alertsRes] = await Promise.all([
-                fetch('https://milbantkar-1.onrender.com/api/users'),
-                fetch('https://milbantkar-1.onrender.com/api/admin/events', { headers }),
-                fetch('https://milbantkar-1.onrender.com/api/admin/expenses', { headers }),
-                fetch('https://milbantkar-1.onrender.com/api/alerts')
+            const [usersRes, eventsRes, expensesRes, alertsRes, pollsRes] = await Promise.all([
+                fetch(`${API_BASE}/api/users`),
+                fetch(`${API_BASE}/api/admin/events`, { headers }),
+                fetch(`${API_BASE}/api/admin/expenses`, { headers }),
+                fetch(`${API_BASE}/api/alerts`),
+                fetch(`${API_BASE}/api/admin/polls`, { headers })
             ]);
 
             // Check if responses are ok
@@ -62,18 +72,21 @@ function AdminPanel() {
             if (!eventsRes.ok) throw new Error('Failed to fetch events');
             if (!expensesRes.ok) throw new Error('Failed to fetch expenses');
             if (!alertsRes.ok) throw new Error('Failed to fetch alerts');
+            if (!pollsRes.ok) throw new Error('Failed to fetch polls');
 
-            const [usersData, eventsData, expensesData, alertsData] = await Promise.all([
+            const [usersData, eventsData, expensesData, alertsData, pollsData] = await Promise.all([
                 usersRes.json(),
                 eventsRes.json(),
                 expensesRes.json(),
-                alertsRes.json()
+                alertsRes.json(),
+                pollsRes.json()
             ]);
 
             setUsers(usersData);
             setEvents(eventsData);
             setExpenses(expensesData);
             setAlerts(alertsData);
+            setPolls(pollsData);
         } catch (err) {
             setError('Failed to fetch data: ' + err.message);
             console.error('Error fetching data:', err);
@@ -93,8 +106,8 @@ function AdminPanel() {
             };
 
             const url = editingItem 
-                ? `https://milbantkar-1.onrender.com/api/admin/users/${editingItem._id}`
-                : 'https://milbantkar-1.onrender.com/api/admin/users';
+                ? `${API_BASE}/api/admin/users/${editingItem._id}`
+                : `${API_BASE}/api/admin/users`;
             
             const method = editingItem ? 'PUT' : 'POST';
             
@@ -143,8 +156,8 @@ function AdminPanel() {
             }
 
             const url = editingItem 
-                ? `https://milbantkar-1.onrender.com/api/admin/events/${editingItem._id}`
-                : 'https://milbantkar-1.onrender.com/api/admin/events';
+                ? `${API_BASE}/api/admin/events/${editingItem._id}`
+                : `${API_BASE}/api/admin/events`;
             
             const method = editingItem ? 'PUT' : 'POST';
             
@@ -171,6 +184,73 @@ function AdminPanel() {
         }
     };
 
+    const handlePollOptionChange = (index, value) => {
+        setPollForm(prev => ({
+            ...prev,
+            options: prev.options.map((option, idx) => (idx === index ? value : option))
+        }));
+    };
+
+    const addPollOption = () => {
+        setPollForm(prev => {
+            if (prev.options.length >= 6) return prev;
+            return { ...prev, options: [...prev.options, ''] };
+        });
+    };
+
+    const removePollOption = (index) => {
+        setPollForm(prev => {
+            if (prev.options.length <= 2) return prev;
+            return {
+                ...prev,
+                options: prev.options.filter((_, idx) => idx !== index)
+            };
+        });
+    };
+
+    const handlePollSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            const adminUsername = localStorage.getItem('username');
+            const cleanedOptions = pollForm.options
+                .map(option => option.trim())
+                .filter(Boolean);
+
+            if (cleanedOptions.length < 2) {
+                throw new Error('Please provide at least 2 poll options');
+            }
+
+            const response = await fetch(`${API_BASE}/api/admin/polls`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    adminUsername
+                },
+                body: JSON.stringify({
+                    message: pollForm.message.trim(),
+                    receiver: pollForm.receiver || undefined,
+                    pollOptions: cleanedOptions
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to create poll');
+            }
+
+            setSuccess('Poll created successfully');
+            setShowPollForm(false);
+            setPollForm({ message: '', receiver: '', options: ['', ''] });
+            fetchAllData();
+        } catch (err) {
+            setError(err.message || 'Failed to create poll');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleDelete = async (type, id) => {
         if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
         
@@ -181,7 +261,7 @@ function AdminPanel() {
                 'adminUsername': adminUsername
             };
 
-            const response = await fetch(`https://milbantkar-1.onrender.com/api/admin/${type}/${id}`, {
+            const response = await fetch(`${API_BASE}/api/admin/${type}/${id}`, {
                 method: 'DELETE',
                 headers
             });
@@ -248,7 +328,7 @@ function AdminPanel() {
         <div className="admin-panel">
             <div className="admin-header">
                 <h1><i className="fas fa-shield-alt"></i> Admin Panel</h1>
-                <p>Manage users, events, expenses, and alerts</p>
+                <p>Manage users, events, expenses, alerts, and polls</p>
             </div>
 
             {error && (
@@ -289,6 +369,12 @@ function AdminPanel() {
                     onClick={() => setActiveTab('alerts')}
                 >
                     <i className="fas fa-bell"></i> Alerts ({alerts.length})
+                </button>
+                <button 
+                    className={`tab-btn ${activeTab === 'polls' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('polls')}
+                >
+                    <i className="fas fa-chart-pie"></i> Polls ({polls.length})
                 </button>
             </div>
 
@@ -546,6 +632,69 @@ function AdminPanel() {
                         </div>
                     </div>
                 )}
+
+                {/* Polls Tab */}
+                {activeTab === 'polls' && (
+                    <div className="tab-content">
+                        <div className="content-header">
+                            <h2>Poll Management</h2>
+                            <button
+                                className="btn-primary"
+                                onClick={() => {
+                                    setShowPollForm(true);
+                                    setPollForm({ message: '', receiver: '', options: ['', ''] });
+                                }}
+                            >
+                                <i className="fas fa-plus"></i> Create Poll
+                            </button>
+                        </div>
+
+                        <div className="data-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Question</th>
+                                        <th>Audience</th>
+                                        <th>Options</th>
+                                        <th>Total Votes</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {polls.map(poll => {
+                                        const totalVotes = (poll.pollOptions || []).reduce((sum, option) => sum + (option.votes?.length || 0), 0);
+                                        return (
+                                            <tr key={poll._id}>
+                                                <td>{poll.message}</td>
+                                                <td>{poll.receiver?.username || 'All Users'}</td>
+                                                <td>
+                                                    <div style={{ display: 'grid', gap: '4px' }}>
+                                                        {(poll.pollOptions || []).map((option, index) => (
+                                                            <span key={`${poll._id}-${index}`}>
+                                                                {option.option} ({option.votes?.length || 0})
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td>{totalVotes}</td>
+                                                <td>{new Date(poll.createdAt).toLocaleString()}</td>
+                                                <td>
+                                                    <button
+                                                        className="btn-delete"
+                                                        onClick={() => handleDelete('polls', poll._id)}
+                                                    >
+                                                        <i className="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* User Form Modal */}
@@ -692,6 +841,87 @@ function AdminPanel() {
                                 <button type="submit" className="btn-primary" disabled={loading}>
                                     {loading ? 'Saving...' : (editingItem ? 'Update' : 'Create')}
                                 </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Poll Form Modal */}
+            {showPollForm && (
+                <div className="modal-overlay">
+                    <div className="modal">
+                        <div className="modal-header">
+                            <h3>Create Poll</h3>
+                            <button
+                                className="btn-close"
+                                onClick={() => setShowPollForm(false)}
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <form onSubmit={handlePollSubmit} className="modal-form">
+                            <div className="form-group">
+                                <label>Poll Question</label>
+                                <input
+                                    type="text"
+                                    value={pollForm.message}
+                                    onChange={(e) => setPollForm({ ...pollForm, message: e.target.value })}
+                                    placeholder="What should we do next weekend?"
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Audience</label>
+                                <select
+                                    value={pollForm.receiver}
+                                    onChange={(e) => setPollForm({ ...pollForm, receiver: e.target.value })}
+                                >
+                                    <option value="">All users</option>
+                                    {users.map(user => (
+                                        <option key={user._id} value={user._id}>
+                                            {user.username} ({user.email})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {pollForm.options.map((option, index) => (
+                                <div className="form-group" key={`poll-option-${index}`}>
+                                    <label>Option {index + 1}</label>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <input
+                                            type="text"
+                                            value={option}
+                                            onChange={(e) => handlePollOptionChange(index, e.target.value)}
+                                            placeholder={`Option ${index + 1}`}
+                                            required
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn-delete"
+                                            onClick={() => removePollOption(index)}
+                                            disabled={pollForm.options.length <= 2}
+                                        >
+                                            <i className="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+
+                            <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+                                <button type="button" className="btn-secondary" onClick={addPollOption} disabled={pollForm.options.length >= 6}>
+                                    Add Option
+                                </button>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button type="button" className="btn-secondary" onClick={() => setShowPollForm(false)}>
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn-primary" disabled={loading}>
+                                        {loading ? 'Publishing...' : 'Publish Poll'}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
