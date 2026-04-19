@@ -349,6 +349,40 @@ const buildSettlementState = (expense) => {
     };
 };
 
+// Generate human-friendly settlement messages
+const getSettlementMessage = (isPaidByUser, expense, isFullySettled) => {
+    const amount = expense.amount;
+    const senderName = isPaidByUser 
+        ? expense.paidBy.username 
+        : expense.paidTo.username;
+    const desc = expense.description ? ` for ${expense.description}` : '';
+
+    if (isFullySettled) {
+        return {
+            title: '✅ All Settled!',
+            body: `You and ${senderName} have settled ₹${amount}${desc}`,
+            message: `All set! You and ${senderName} have settled ₹${amount}${desc} ✅`,
+            type: 'success'
+        };
+    }
+
+    if (isPaidByUser) {
+        return {
+            title: '💳 Payment Sent',
+            body: `${senderName} paid you ₹${amount}${desc}. Did you receive it?`,
+            message: `${senderName} paid you ₹${amount}${desc}. Did you receive it?`,
+            type: 'info'
+        };
+    } else {
+        return {
+            title: '⏳ Confirm Receipt',
+            body: `Confirm you got ₹${amount}${desc} from ${senderName}?`,
+            message: `Please confirm you received ₹${amount}${desc} from ${senderName}`,
+            type: 'info'
+        };
+    }
+};
+
 // Add an expense log
 app.post('/api/expense/add', async (req, res) => {
     try {
@@ -430,7 +464,7 @@ app.get("/api/expense", async (req, res) => {
 
 app.put('/api/expense/status/:id', async (req, res) => {
     const { id } = req.params;
-    const { userId } = req.body;
+    const { userId, confirmed } = req.body;
 
     try {
         if (!userId) {
@@ -452,20 +486,24 @@ app.put('/api/expense/status/:id', async (req, res) => {
         const normalizedSettlement = buildSettlementState(expense);
         const isPaidByUser = paidById === userId;
 
+        const hasExplicitConfirmation = typeof confirmed === 'boolean';
+        const nextPaidByConfirmed = isPaidByUser
+            ? (hasExplicitConfirmation ? confirmed : !normalizedSettlement.paidByConfirmed)
+            : normalizedSettlement.paidByConfirmed;
+        const nextPaidToConfirmed = isPaidByUser
+            ? normalizedSettlement.paidToConfirmed
+            : (hasExplicitConfirmation ? confirmed : !normalizedSettlement.paidToConfirmed);
+
         expense.settlementConfirmation = {
             ...normalizedSettlement,
-            paidByConfirmed: isPaidByUser
-                ? !normalizedSettlement.paidByConfirmed
-                : normalizedSettlement.paidByConfirmed,
-            paidToConfirmed: isPaidByUser
-                ? normalizedSettlement.paidToConfirmed
-                : !normalizedSettlement.paidToConfirmed,
+            paidByConfirmed: nextPaidByConfirmed,
+            paidToConfirmed: nextPaidToConfirmed,
             paidByConfirmedAt: isPaidByUser
-                ? (!normalizedSettlement.paidByConfirmed ? new Date() : null)
+                ? (nextPaidByConfirmed ? (normalizedSettlement.paidByConfirmedAt || new Date()) : null)
                 : normalizedSettlement.paidByConfirmedAt,
             paidToConfirmedAt: isPaidByUser
                 ? normalizedSettlement.paidToConfirmedAt
-                : (!normalizedSettlement.paidToConfirmed ? new Date() : null)
+                : (nextPaidToConfirmed ? (normalizedSettlement.paidToConfirmedAt || new Date()) : null)
         };
 
         expense.status = expense.settlementConfirmation.paidByConfirmed && expense.settlementConfirmation.paidToConfirmed;
@@ -475,6 +513,51 @@ app.put('/api/expense/status/:id', async (req, res) => {
             .populate('paidBy', 'username _id')
             .populate('paidTo', 'username _id');
 
+        // Determine the other user and if fully settled
+        const otherUserId = isPaidByUser ? updatedExpense.paidTo._id : updatedExpense.paidBy._id;
+        const isFullySettled = updatedExpense.status;
+
+        // Generate human-friendly message
+        const msgData = getSettlementMessage(isPaidByUser, updatedExpense, isFullySettled);
+
+        // Create Alert in database
+        const newAlert = new Alert({
+            sender: isPaidByUser ? updatedExpense.paidBy._id : updatedExpense.paidTo._id,
+            receiver: otherUserId,
+            message: msgData.message,
+            type: msgData.type,
+            expenseDetails: id,
+            seen: false
+        });
+        await newAlert.save();
+
+        // Send Web Push Notification
+        await sendWebPushToUser(otherUserId, {
+            title: msgData.title,
+            body: msgData.body,
+            tag: `settlement-${id}`,
+            badge: '/logo-icon.png',
+            actions: !isFullySettled && isPaidByUser ? [
+                {
+                    action: 'confirm-yes',
+                    title: '✅ Yes, Got It'
+                },
+                {
+                    action: 'confirm-no',
+                    title: '❌ Not Yet'
+                }
+            ] : [],
+            data: {
+                expenseId: id,
+                action: 'settlement_confirmation',
+                userId: String(otherUserId),
+                fromUser: isPaidByUser ? updatedExpense.paidBy.username : updatedExpense.paidTo.username,
+                amount: updatedExpense.amount,
+                settled: isFullySettled
+            }
+        });
+
+        // Socket notification for real-time update
         const paidBySocketId = userSockets.get(String(updatedExpense.paidBy?._id || ''));
         const paidToSocketId = userSockets.get(String(updatedExpense.paidTo?._id || ''));
 
@@ -484,6 +567,16 @@ app.put('/api/expense/status/:id', async (req, res) => {
 
         if (paidToSocketId && paidToSocketId !== paidBySocketId) {
             io.to(paidToSocketId).emit('expense-status-updated', updatedExpense);
+        }
+
+        // Emit settlement alert to the counterparty
+        const otherUserSocketId = isPaidByUser ? paidToSocketId : paidBySocketId;
+        if (otherUserSocketId) {
+            io.to(otherUserSocketId).emit('settlement-alert', {
+                message: msgData.message,
+                expense: updatedExpense,
+                settled: isFullySettled
+            });
         }
 
         res.json({
@@ -1144,6 +1237,54 @@ app.delete('/api/admin/polls/:id', isAdmin, async (req, res) => {
     }
 });
   
+// Push Notification Subscription
+app.post('/api/subscribe', async (req, res) => {
+    try {
+        const { userId, subscription } = req.body;
+
+        if (!userId || !subscription) {
+            return res.status(400).json({ message: 'userId and subscription required' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check if subscription already exists
+        const exists = user.pushSubscriptions.some(sub => sub.endpoint === subscription.endpoint);
+        if (!exists) {
+            user.pushSubscriptions.push(subscription);
+            await user.save();
+        }
+
+        res.status(201).json({ message: 'Subscription saved' });
+    } catch (error) {
+        console.error('Error saving subscription:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// Unsubscribe from push notifications
+app.post('/api/unsubscribe', async (req, res) => {
+    try {
+        const { userId, endpoint } = req.body;
+
+        if (!userId || !endpoint) {
+            return res.status(400).json({ message: 'userId and endpoint required' });
+        }
+
+        await User.findByIdAndUpdate(userId, {
+            $pull: { pushSubscriptions: { endpoint } }
+        });
+
+        res.json({ message: 'Unsubscribed' });
+    } catch (error) {
+        console.error('Error unsubscribing:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
 // Start server
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server is running on http://localhost:${PORT}`);
