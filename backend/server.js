@@ -493,6 +493,13 @@ app.put('/api/expense/status/:id', async (req, res) => {
         const nextPaidToConfirmed = isPaidByUser
             ? normalizedSettlement.paidToConfirmed
             : (hasExplicitConfirmation ? confirmed : !normalizedSettlement.paidToConfirmed);
+        const actorConfirmedBefore = isPaidByUser
+            ? normalizedSettlement.paidByConfirmed
+            : normalizedSettlement.paidToConfirmed;
+        const actorConfirmedAfter = isPaidByUser
+            ? nextPaidByConfirmed
+            : nextPaidToConfirmed;
+        const shouldNotifyCounterparty = !actorConfirmedBefore && actorConfirmedAfter;
 
         expense.settlementConfirmation = {
             ...normalizedSettlement,
@@ -517,45 +524,47 @@ app.put('/api/expense/status/:id', async (req, res) => {
         const otherUserId = isPaidByUser ? updatedExpense.paidTo._id : updatedExpense.paidBy._id;
         const isFullySettled = updatedExpense.status;
 
-        // Generate human-friendly message
-        const msgData = getSettlementMessage(isPaidByUser, updatedExpense, isFullySettled);
+        if (shouldNotifyCounterparty) {
+            // Generate human-friendly message
+            const msgData = getSettlementMessage(isPaidByUser, updatedExpense, isFullySettled);
 
-        // Create Alert in database
-        const newAlert = new Alert({
-            sender: isPaidByUser ? updatedExpense.paidBy._id : updatedExpense.paidTo._id,
-            receiver: otherUserId,
-            message: msgData.message,
-            type: msgData.type,
-            expenseDetails: id,
-            seen: false
-        });
-        await newAlert.save();
+            // Create Alert in database
+            const newAlert = new Alert({
+                sender: isPaidByUser ? updatedExpense.paidBy._id : updatedExpense.paidTo._id,
+                receiver: otherUserId,
+                message: msgData.message,
+                type: msgData.type,
+                expenseDetails: id,
+                seen: false
+            });
+            await newAlert.save();
 
-        // Send Web Push Notification
-        await sendWebPushToUser(otherUserId, {
-            title: msgData.title,
-            body: msgData.body,
-            tag: `settlement-${id}`,
-            badge: '/logo-icon.png',
-            actions: !isFullySettled && isPaidByUser ? [
-                {
-                    action: 'confirm-yes',
-                    title: '✅ Yes, Got It'
-                },
-                {
-                    action: 'confirm-no',
-                    title: '❌ Not Yet'
+            // Send Web Push Notification
+            await sendWebPushToUser(otherUserId, {
+                title: msgData.title,
+                body: msgData.body,
+                tag: `settlement-${id}`,
+                badge: '/logo-icon.png',
+                actions: !isFullySettled && isPaidByUser ? [
+                    {
+                        action: 'confirm-yes',
+                        title: '✅ Yes, Got It'
+                    },
+                    {
+                        action: 'confirm-no',
+                        title: '❌ Not Yet'
+                    }
+                ] : [],
+                data: {
+                    expenseId: id,
+                    action: 'settlement_confirmation',
+                    userId: String(otherUserId),
+                    fromUser: isPaidByUser ? updatedExpense.paidBy.username : updatedExpense.paidTo.username,
+                    amount: updatedExpense.amount,
+                    settled: isFullySettled
                 }
-            ] : [],
-            data: {
-                expenseId: id,
-                action: 'settlement_confirmation',
-                userId: String(otherUserId),
-                fromUser: isPaidByUser ? updatedExpense.paidBy.username : updatedExpense.paidTo.username,
-                amount: updatedExpense.amount,
-                settled: isFullySettled
-            }
-        });
+            });
+        }
 
         // Socket notification for real-time update
         const paidBySocketId = userSockets.get(String(updatedExpense.paidBy?._id || ''));
@@ -569,18 +578,22 @@ app.put('/api/expense/status/:id', async (req, res) => {
             io.to(paidToSocketId).emit('expense-status-updated', updatedExpense);
         }
 
-        // Emit settlement alert to the counterparty
-        const otherUserSocketId = isPaidByUser ? paidToSocketId : paidBySocketId;
-        if (otherUserSocketId) {
-            io.to(otherUserSocketId).emit('settlement-alert', {
-                message: msgData.message,
-                expense: updatedExpense,
-                settled: isFullySettled
-            });
+        // Emit settlement alert to the counterparty only when confirmation is newly set
+        if (shouldNotifyCounterparty) {
+            const msgData = getSettlementMessage(isPaidByUser, updatedExpense, isFullySettled);
+            const otherUserSocketId = isPaidByUser ? paidToSocketId : paidBySocketId;
+            if (otherUserSocketId) {
+                io.to(otherUserSocketId).emit('settlement-alert', {
+                    message: msgData.message,
+                    expense: updatedExpense,
+                    settled: isFullySettled
+                });
+            }
         }
 
         res.json({
             ...updatedExpense.toObject(),
+            actorConfirmed: actorConfirmedAfter,
             status: updatedExpense.settlementConfirmation.paidByConfirmed && updatedExpense.settlementConfirmation.paidToConfirmed
         });
     } catch (error) {

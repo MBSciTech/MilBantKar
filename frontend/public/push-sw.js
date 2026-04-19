@@ -110,8 +110,9 @@ async function handleSettlementConfirmation(expenseId, userId, confirmed) {
     }
 
     const result = await response.json();
+    const actorConfirmed = typeof result.actorConfirmed === 'boolean' ? result.actorConfirmed : confirmed;
 
-    if (confirmed && result.status) {
+    if (actorConfirmed && result.status) {
       await self.registration.showNotification('All settled', {
         body: 'Payment confirmed and settled successfully.',
         icon: '/logo192.png',
@@ -120,7 +121,7 @@ async function handleSettlementConfirmation(expenseId, userId, confirmed) {
       return;
     }
 
-    if (confirmed) {
+    if (actorConfirmed) {
       await self.registration.showNotification('Confirmed', {
         body: 'You confirmed receiving the payment.',
         icon: '/logo192.png',
