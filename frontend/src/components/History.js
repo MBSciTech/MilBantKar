@@ -37,6 +37,35 @@ function History() {
     return name.charAt(0).toUpperCase();
   };
 
+  const getUserProfilePic = (userRef) => {
+    if (!userRef || typeof userRef === 'string') return '';
+    return userRef.profilePic || '';
+  };
+
+  const renderUserAvatar = (userRef, fallbackClassName, size = 40) => {
+    const profilePic = getUserProfilePic(userRef);
+
+    if (profilePic) {
+      return (
+        <img
+          src={profilePic}
+          alt={getUserRefName(userRef)}
+          className={fallbackClassName}
+          style={{ width: `${size}px`, height: `${size}px`, objectFit: 'cover' }}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+            const fallback = e.currentTarget.nextElementSibling;
+            if (fallback) {
+              fallback.style.display = 'flex';
+            }
+          }}
+        />
+      );
+    }
+
+    return null;
+  };
+
   const mergeExpenseUsers = (previousExpense, nextExpense) => ({
     ...previousExpense,
     ...nextExpense,
@@ -1066,9 +1095,10 @@ function History() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="d-flex align-items-center">
-                              <div className="bg-primary rounded-circle me-3 d-flex align-items-center justify-content-center avatar-circle" 
+                              <div className="bg-primary rounded-circle me-3 d-flex align-items-center justify-content-center avatar-circle overflow-hidden" 
                                    style={{width: '40px', height: '40px'}}>
-                                <span className="text-white fw-bold">
+                                {renderUserAvatar(exp.paidBy, 'w-100 h-100')}
+                                <span className="text-white fw-bold" style={{ display: getUserProfilePic(exp.paidBy) ? 'none' : 'inline' }}>
                                   {getUserInitial(exp.paidBy)}
                                 </span>
                               </div>
@@ -1079,9 +1109,10 @@ function History() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="d-flex align-items-center">
-                              <div className="bg-success rounded-circle me-3 d-flex align-items-center justify-content-center avatar-circle" 
+                              <div className="bg-success rounded-circle me-3 d-flex align-items-center justify-content-center avatar-circle overflow-hidden" 
                                    style={{width: '40px', height: '40px'}}>
-                                <span className="text-white fw-bold">
+                                {renderUserAvatar(exp.paidTo, 'w-100 h-100')}
+                                <span className="text-white fw-bold" style={{ display: getUserProfilePic(exp.paidTo) ? 'none' : 'inline' }}>
                                   {getUserInitial(exp.paidTo)}
                                 </span>
                               </div>
@@ -1110,14 +1141,20 @@ function History() {
                                 </div>
                                 <div className="settlement-points">
                                   <div className={`settlement-point ${getSettlementState(exp).paidByConfirmed ? 'is-complete' : ''}`}>
-                                    <div className="settlement-avatar">{getUserInitial(exp.paidBy)}</div>
+                                    <div className="settlement-avatar overflow-hidden d-flex align-items-center justify-content-center">
+                                      {renderUserAvatar(exp.paidBy, 'w-100 h-100', 36)}
+                                      <span style={{ display: getUserProfilePic(exp.paidBy) ? 'none' : 'inline' }}>{getUserInitial(exp.paidBy)}</span>
+                                    </div>
                                     <div className="settlement-name">{getUserRefName(exp.paidBy) === user ? 'You' : getUserRefName(exp.paidBy)}</div>
                                     <span className={`settlement-state ${getSettlementState(exp).paidByConfirmed ? 'confirmed' : 'awaiting'}`}>
                                       {getSettlementState(exp).paidByConfirmed ? 'Done' : 'Wait'}
                                     </span>
                                   </div>
                                   <div className={`settlement-point ${getSettlementState(exp).paidToConfirmed ? 'is-complete' : ''}`}>
-                                    <div className="settlement-avatar">{getUserInitial(exp.paidTo)}</div>
+                                    <div className="settlement-avatar overflow-hidden d-flex align-items-center justify-content-center">
+                                      {renderUserAvatar(exp.paidTo, 'w-100 h-100', 36)}
+                                      <span style={{ display: getUserProfilePic(exp.paidTo) ? 'none' : 'inline' }}>{getUserInitial(exp.paidTo)}</span>
+                                    </div>
                                     <div className="settlement-name">{getUserRefName(exp.paidTo) === user ? 'You' : getUserRefName(exp.paidTo)}</div>
                                     <span className={`settlement-state ${getSettlementState(exp).paidToConfirmed ? 'confirmed' : 'awaiting'}`}>
                                       {getSettlementState(exp).paidToConfirmed ? 'Done' : 'Wait'}
@@ -1212,8 +1249,9 @@ function History() {
                       </span>
                     </div>
                     <div className="d-flex align-items-center mb-2">
-                      <div className="bg-primary rounded-circle me-2 d-flex align-items-center justify-content-center avatar-circle" style={{ width: '36px', height: '36px' }}>
-                        <span className="text-white fw-bold">
+                      <div className="bg-primary rounded-circle me-2 d-flex align-items-center justify-content-center avatar-circle overflow-hidden" style={{ width: '36px', height: '36px' }}>
+                        {renderUserAvatar(exp.paidBy, 'w-100 h-100', 36)}
+                        <span className="text-white fw-bold" style={{ display: getUserProfilePic(exp.paidBy) ? 'none' : 'inline' }}>
                           {getUserInitial(exp.paidBy)}
                         </span>
                       </div>
@@ -1221,8 +1259,9 @@ function History() {
                         {getUserRefName(exp.paidBy) === user ? 'You' : getUserRefName(exp.paidBy)}
                       </span>
                       <span className="mx-2 text-muted">→</span>
-                      <div className="bg-success rounded-circle me-2 d-flex align-items-center justify-content-center avatar-circle" style={{ width: '36px', height: '36px' }}>
-                        <span className="text-white fw-bold">
+                      <div className="bg-success rounded-circle me-2 d-flex align-items-center justify-content-center avatar-circle overflow-hidden" style={{ width: '36px', height: '36px' }}>
+                        {renderUserAvatar(exp.paidTo, 'w-100 h-100', 36)}
+                        <span className="text-white fw-bold" style={{ display: getUserProfilePic(exp.paidTo) ? 'none' : 'inline' }}>
                           {getUserInitial(exp.paidTo)}
                         </span>
                       </div>
@@ -1247,14 +1286,20 @@ function History() {
                         </div>
                         <div className="settlement-points">
                           <div className={`settlement-point ${getSettlementState(exp).paidByConfirmed ? 'is-complete' : ''}`}>
-                            <div className="settlement-avatar">{getUserInitial(exp.paidBy)}</div>
+                            <div className="settlement-avatar overflow-hidden d-flex align-items-center justify-content-center">
+                              {renderUserAvatar(exp.paidBy, 'w-100 h-100', 36)}
+                              <span style={{ display: getUserProfilePic(exp.paidBy) ? 'none' : 'inline' }}>{getUserInitial(exp.paidBy)}</span>
+                            </div>
                             <div className="settlement-name">{getUserRefName(exp.paidBy) === user ? 'You' : getUserRefName(exp.paidBy)}</div>
                             <span className={`settlement-state ${getSettlementState(exp).paidByConfirmed ? 'confirmed' : 'awaiting'}`}>
                               {getSettlementState(exp).paidByConfirmed ? 'Done' : 'Wait'}
                             </span>
                           </div>
                           <div className={`settlement-point ${getSettlementState(exp).paidToConfirmed ? 'is-complete' : ''}`}>
-                            <div className="settlement-avatar">{getUserInitial(exp.paidTo)}</div>
+                            <div className="settlement-avatar overflow-hidden d-flex align-items-center justify-content-center">
+                              {renderUserAvatar(exp.paidTo, 'w-100 h-100', 36)}
+                              <span style={{ display: getUserProfilePic(exp.paidTo) ? 'none' : 'inline' }}>{getUserInitial(exp.paidTo)}</span>
+                            </div>
                             <div className="settlement-name">{getUserRefName(exp.paidTo) === user ? 'You' : getUserRefName(exp.paidTo)}</div>
                             <span className={`settlement-state ${getSettlementState(exp).paidToConfirmed ? 'confirmed' : 'awaiting'}`}>
                               {getSettlementState(exp).paidToConfirmed ? 'Done' : 'Wait'}

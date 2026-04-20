@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import Signup from './pages/Signup';
 import Login from './pages/Login';
@@ -18,13 +18,36 @@ import Help from './pages/Help';
 import SettingsPage from './pages/SettingsPage';
 import QRScanner from './components/QRScanner';
 import Calculate from './pages/Calculate';
+import { getAuthSession } from './utils/authSession';
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || "https://milbantkar-1.onrender.com";
+
+function ProtectedRoute({ children }) {
+  const location = useLocation();
+  const session = getAuthSession();
+
+  if (!session) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  return children;
+}
+
+function PublicOnlyRoute({ children }) {
+  const session = getAuthSession();
+
+  if (session) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
 
 // Initialize notifications
 async function initializeNotifications() {
   try {
-    const userId = localStorage.getItem('userId');
+    const session = getAuthSession();
+    const userId = session?.userId || localStorage.getItem('userId');
     
     if (!userId) {
       return; // User not logged in
@@ -115,6 +138,8 @@ function AppLayout() {
   const hideNavbar = location.pathname === '/login';
 
   useEffect(() => {
+    getAuthSession();
+
     // Initialize notifications when user is logged in
     const userId = localStorage.getItem('userId');
     if (userId) {
@@ -129,21 +154,21 @@ function AppLayout() {
       <main className="flex-grow-1">
         <Routes>
           <Route path="/" element={<Welcome />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/events" element={<Events user={localStorage} />} />
-          <Route path="/budget" element={<Budget />} />
-          <Route path="/transaction" element={<Transaction />} />
-          <Route path="/profile" element={<Profile username={localStorage.getItem('username')} />} />
-          <Route path='/events/:eventId' element={<EventPage />}/>
-          <Route path='/visualise' element={<Visualise/>}/>
-          <Route path='/admin' element={<AdminPanel/>}/>
+          <Route path="/signup" element={<PublicOnlyRoute><Signup /></PublicOnlyRoute>} />
+          <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+          <Route path="/events" element={<ProtectedRoute><Events user={localStorage} /></ProtectedRoute>} />
+          <Route path="/budget" element={<ProtectedRoute><Budget /></ProtectedRoute>} />
+          <Route path="/transaction" element={<ProtectedRoute><Transaction /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile username={localStorage.getItem('username')} /></ProtectedRoute>} />
+          <Route path='/events/:eventId' element={<ProtectedRoute><EventPage /></ProtectedRoute>}/>
+          <Route path='/visualise' element={<ProtectedRoute><Visualise/></ProtectedRoute>}/>
+          <Route path='/admin' element={<ProtectedRoute><AdminPanel/></ProtectedRoute>}/>
           <Route path='/help' element={<Help/>}/>
-          <Route path='/settings' element={<SettingsPage/>}/>
-          <Route path='/scanner' element={<QRScanner/>}/>
-          <Route path='/calculate' element={<Calculate/>}/>
+          <Route path='/settings' element={<ProtectedRoute><SettingsPage/></ProtectedRoute>}/>
+          <Route path='/scanner' element={<ProtectedRoute><QRScanner/></ProtectedRoute>}/>
+          <Route path='/calculate' element={<ProtectedRoute><Calculate/></ProtectedRoute>}/>
         </Routes>
       </main>
 

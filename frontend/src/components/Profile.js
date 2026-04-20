@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Edit3, Camera, Save, X, Mail, Phone, Calendar, Shield } from 'lucide-react';
+import { updateAuthSessionUsername } from '../utils/authSession';
 
 const Profile = ({ username }) => {
   const [user, setUser] = useState(null);
@@ -129,7 +130,7 @@ const Profile = ({ username }) => {
         setProfilePicPreview(null);
         // Update localStorage username if changed
         if (editForm.username && editForm.username !== user.username) {
-          localStorage.setItem('username', editForm.username);
+          updateAuthSessionUsername(editForm.username);
         }
         alert('Profile updated successfully!');
       } else {

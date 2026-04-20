@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAuthSession, saveAuthSession } from '../utils/authSession';
 
 function Login() {
   const [formData, setFormData] = useState({
@@ -12,6 +13,13 @@ function Login() {
   const [rememberMe, setRememberMe] = useState(false);
 
   useEffect(() => {
+    const existingSession = getAuthSession();
+
+    if (existingSession) {
+      window.location.href = '/dashboard';
+      return;
+    }
+
     // Check if credentials are saved
     const savedUsername = localStorage.getItem('rememberedUsername');
     if (savedUsername) {
@@ -157,9 +165,10 @@ function Login() {
         }
 
         // Save user data
-        localStorage.setItem('username', data.user.username);
-        localStorage.setItem('userId', data.user.id);
-        localStorage.setItem('authToken', data.token || 'dummy-token'); // In real app, use actual token
+        saveAuthSession({
+          userId: data.user.id,
+          username: data.user.username
+        });
 
         setTimeout(() => {
         window.location.href = '/dashboard';

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
+import { clearAuthSession, getAuthSession } from '../utils/authSession';
 import { 
   Menu, 
   X, 
@@ -84,8 +85,9 @@ function Navbar() {
 
   // Fetch current user data
   useEffect(() => {
-    const username = typeof window !== 'undefined' && window.localStorage ? 
-      localStorage.getItem('username') : 'demo_user';
+    const session = getAuthSession();
+    const username = session?.username || (typeof window !== 'undefined' && window.localStorage ? 
+      localStorage.getItem('username') : 'demo_user');
     
     if (!username) return;
   
@@ -292,13 +294,11 @@ function Navbar() {
   };
 
   const handleLogout = () => {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem('username');
-    }
+    clearAuthSession();
     setIsMobileMenuOpen(false);
     setIsProfileOpen(false);
     if (typeof window !== 'undefined') {
-      window.location.href = '/';
+      window.location.href = '/login';
     }
   };
 

@@ -441,8 +441,8 @@ app.post('/api/expense/add', async (req, res) => {
 app.get("/api/expense", async (req, res) => {
     try {
       const expenses = await expenceLog.find()
-        .populate("paidBy", "username _id")
-        .populate("paidTo", "username _id");
+                .populate("paidBy", "username _id profilePic")
+                .populate("paidTo", "username _id profilePic");
 
       const normalizedExpenses = expenses.map((expense) => {
         const normalizedSettlement = buildSettlementState(expense);
@@ -517,8 +517,8 @@ app.put('/api/expense/status/:id', async (req, res) => {
         await expense.save();
 
         const updatedExpense = await expenceLog.findById(id)
-            .populate('paidBy', 'username _id')
-            .populate('paidTo', 'username _id');
+            .populate('paidBy', 'username _id profilePic')
+            .populate('paidTo', 'username _id profilePic');
 
         // Determine the other user and if fully settled
         const otherUserId = isPaidByUser ? updatedExpense.paidTo._id : updatedExpense.paidBy._id;
