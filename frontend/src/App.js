@@ -18,6 +18,7 @@ import Help from './pages/Help';
 import SettingsPage from './pages/SettingsPage';
 import QRScanner from './components/QRScanner';
 import Calculate from './pages/Calculate';
+import AssistantBot from './components/AssistantBot';
 import { getAuthSession } from './utils/authSession';
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || "https://milbantkar-1.onrender.com";
@@ -173,6 +174,7 @@ function AppLayout() {
       </main>
 
       <Footer />
+      <AssistantBot />
     </div>
   );
 }

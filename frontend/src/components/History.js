@@ -1275,10 +1275,10 @@ function History() {
                       </span>
                     </div>
                     <div className="settlement-panel settlement-panel-mobile mb-3">
-                      <div className={`settlement-summary ${getSettlementLabel(exp).tone}`}>
+                      {/* <div className={`settlement-summary ${getSettlementLabel(exp).tone}`}>
                         <i className={`bi ${getSettlementState(exp).status ? 'bi-check-circle-fill' : hasCurrentUserConfirmed(exp) ? 'bi-hourglass-split' : 'bi-clock-fill'}`}></i>
                         {getSettlementLabel(exp).title}
-                      </div>
+                      </div> */}
                       <div className="settlement-copy">{getSettlementLabel(exp).subtitle}</div>
                       <div className="settlement-meter">
                         <div className="settlement-track">
