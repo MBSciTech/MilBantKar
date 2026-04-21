@@ -4,19 +4,13 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const webpush = require('web-push');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
-const Chat = require('./models/Chat');
 
 require('dotenv').config();
-
-const geminiApiKey = process.env.GEMINI_API_KEY || '';
-const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
-const GEMINI_MODEL = 'gemini-1.5-flash';
 
 const ROUTE_CATALOG = [
     { route: '/dashboard', title: 'Dashboard', aliases: ['dashboard'] },
@@ -118,39 +112,6 @@ const buildSearchContext = async (userId, message) => {
     };
 };
 
-const buildChatPrompt = ({ message, currentUsername, routeSuggestion, searchResults }) => {
-    const context = {
-        appName: 'MilBantKar',
-        currentUsername,
-        allowedRoutes: ROUTE_CATALOG.map((route) => ({ route: route.route, title: route.title })),
-        routeSuggestion: routeSuggestion ? { route: routeSuggestion.route, title: routeSuggestion.title } : null,
-        searchResults,
-        instructions: [
-            'Answer as the MilBantKar assistant.',
-            'Use only the provided app context and search results.',
-            'If the user wants to navigate, set cta to a route from allowedRoutes.',
-            'If the user wants to add a transaction, set actionType to start_transaction.',
-            'If searchResults are provided, summarize them briefly and do not invent extra transactions.',
-            'Return valid JSON only.',
-        ],
-    };
-
-    return `Context:\n${JSON.stringify(context, null, 2)}\n\nUser message:\n${message}`;
-};
-
-const parseGeminiJson = (text) => {
-    const cleaned = String(text || '')
-        .replace(/```json/gi, '')
-        .replace(/```/g, '')
-        .trim();
-
-    try {
-        return JSON.parse(cleaned);
-    } catch {
-        return null;
-    }
-};
-
 const safeRouteCta = (cta) => {
     if (!cta || typeof cta !== 'object') {
         return null;
@@ -165,16 +126,6 @@ const safeRouteCta = (cta) => {
         label: String(cta.label || `Open ${route.title}`),
         href: route.route,
     };
-};
-
-const storeChatTurn = async (userId, role, text) => {
-    if (!text) return;
-
-    await Chat.create({
-        userId: String(userId),
-        role,
-        parts: [{ text: String(text) }],
-    });
 };
 
 const createFallbackChatReply = (message, routeSuggestion, searchResults) => {
@@ -288,7 +239,7 @@ app.use(express.json({ limit: '10mb' })); // Increase limit for base64 images
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // MongoDB connection (MilBantKar database)
-const MONGO_URI = "mongodb+srv://maharshibhattisro:HrWtuS7vTSHI4rf9@milbantkar.jswsezd.mongodb.net/MilBantKar?retryWrites=true&w=majority&appName=MilBantKar";
+const MONGO_URI = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
@@ -321,52 +272,9 @@ app.post('/api/chat', async (req, res) => {
         const normalizedMessage = String(message || '').trim();
         const routeSuggestion = getRouteByAlias(normalizedMessage);
         const { searchResults, currentUsername } = await buildSearchContext(userId, normalizedMessage);
-        const history = await Chat.find({ userId: String(userId) })
-            .sort({ createdAt: 1 })
-            .select('role parts')
-            .limit(20);
-
-        await storeChatTurn(userId, 'user', normalizedMessage);
 
         const fallbackPayload = createFallbackChatReply(normalizedMessage, routeSuggestion, searchResults);
-        let payload = { ...fallbackPayload };
-
-        if (genAI) {
-            try {
-                const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
-                const chat = model.startChat({
-                    history: history.map((entry) => ({
-                        role: entry.role,
-                        parts: entry.parts,
-                    })),
-                });
-
-                const prompt = buildChatPrompt({
-                    message: normalizedMessage,
-                    currentUsername,
-                    routeSuggestion,
-                    searchResults,
-                });
-
-                const result = await chat.sendMessage(prompt);
-                const responseText = result?.response?.text?.() || '';
-                const parsed = parseGeminiJson(responseText);
-
-                if (parsed && typeof parsed === 'object') {
-                    payload = {
-                        ...fallbackPayload,
-                        ...parsed,
-                    };
-                } else if (responseText.trim()) {
-                    payload = {
-                        ...fallbackPayload,
-                        reply: responseText.trim(),
-                    };
-                }
-            } catch (aiError) {
-                console.error('❌ Gemini chat error:', aiError.message || aiError);
-            }
-        }
+        const payload = { ...fallbackPayload };
 
         if (routeSuggestion) {
             payload.cta = safeRouteCta(payload.cta) || {
@@ -392,7 +300,6 @@ app.post('/api/chat', async (req, res) => {
         }
 
         const modelReply = String(payload.reply || '').trim();
-        await storeChatTurn(userId, 'model', modelReply || 'Okay.');
 
         res.status(200).json({
             reply: modelReply || 'Okay.',
