@@ -4,13 +4,203 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const webpush = require('web-push');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const User = require('./models/User');
 const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
+const Chat = require('./models/Chat');
 
 require('dotenv').config();
+
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+const GEMINI_MODEL = 'gemini-1.5-flash';
+
+const ROUTE_CATALOG = [
+    { route: '/dashboard', title: 'Dashboard', aliases: ['dashboard'] },
+    { route: '/events', title: 'Events', aliases: ['events', 'event page', 'create event'] },
+    { route: '/history', title: 'History', aliases: ['history', 'transactions', 'spending history'] },
+    { route: '/budget', title: 'Budget', aliases: ['budget'] },
+    { route: '/profile', title: 'Profile', aliases: ['profile', 'my profile'] },
+    { route: '/settings', title: 'Settings', aliases: ['settings'] },
+    { route: '/help', title: 'Help', aliases: ['help', 'support'] },
+    { route: '/transaction', title: 'Transaction', aliases: ['transaction', 'add transaction', 'expense'] },
+    { route: '/visualise', title: 'Visualise', aliases: ['visualise', 'visualize'] },
+    { route: '/scanner', title: 'QR Scanner', aliases: ['scanner', 'qr scanner'] },
+    { route: '/calculate', title: 'Calculate', aliases: ['calculate', 'calculator'] },
+    { route: '/admin', title: 'Admin Panel', aliases: ['admin', 'admin panel'] },
+];
+
+const normalizeText = (value) => String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const extractSearchTerms = (query) => normalizeText(query)
+    .split(' ')
+    .filter((word) => word && !['i', 'want', 'to', 'see', 'how', 'much', 'my', 'me', 'the', 'a', 'an', 'for', 'of', 'and', 'what', 'who', 'did', 'paid', 'pay', 'spent', 'spend', 'transactions', 'transaction'].includes(word));
+
+const getRouteByAlias = (message) => {
+    const normalizedMessage = normalizeText(message);
+    return ROUTE_CATALOG.find((route) => route.aliases.some((alias) => normalizedMessage.includes(alias))) || null;
+};
+
+const expenseMatchesQuery = (expense, query, currentUsername) => {
+    const normalizedQuery = normalizeText(query);
+    const searchableText = normalizeText([
+        expense.description,
+        expense.paidBy?.username,
+        expense.paidTo?.username,
+        expense.amount,
+        expense.date,
+    ].join(' '));
+
+    const searchTerms = extractSearchTerms(query);
+    const wantsMyTransactions = /\b(my|i|me)\b.*\b(transaction|transactions|spent|spend|paid)\b/.test(normalizedQuery)
+        || normalizedQuery.includes('transactions i made')
+        || normalizedQuery.includes('how much transactions i made');
+
+    if (wantsMyTransactions && currentUsername) {
+        return expense.paidBy?.username === currentUsername || expense.paidTo?.username === currentUsername;
+    }
+
+    if (normalizedQuery.includes('to whom i paid') || normalizedQuery.includes('who did i pay')) {
+        return expense.paidBy?.username === currentUsername;
+    }
+
+    if (searchTerms.length === 0) {
+        return searchableText.includes(normalizedQuery);
+    }
+
+    return searchTerms.some((term) => searchableText.includes(term));
+};
+
+const serializeExpenseForChat = (expense, currentUsername) => {
+    const paidByName = expense.paidBy?.username || 'Unknown';
+    const paidToName = expense.paidTo?.username || 'Unknown';
+    const isPaidByUser = paidByName === currentUsername;
+
+    return {
+        _id: expense._id,
+        paidBy: expense.paidBy,
+        paidTo: expense.paidTo,
+        amount: expense.amount,
+        description: expense.description,
+        date: expense.date,
+        status: Boolean(expense.status),
+        direction: isPaidByUser ? 'paid' : 'received'
+    };
+};
+
+const buildSearchContext = async (userId, message) => {
+    const currentUser = await User.findById(userId).select('username _id');
+    if (!currentUser) {
+        return { searchResults: [], currentUsername: '' };
+    }
+
+    const expenses = await ExpenseLog.find({
+        $or: [{ paidBy: userId }, { paidTo: userId }]
+    })
+        .populate('paidBy', 'username _id profilePic')
+        .populate('paidTo', 'username _id profilePic')
+        .sort({ createdAt: -1 })
+        .limit(100);
+
+    const matches = expenses.filter((expense) => expenseMatchesQuery(expense, message, currentUser.username));
+    const selectedExpenses = (matches.length ? matches : expenses.slice(0, 5)).slice(0, 6);
+
+    return {
+        searchResults: selectedExpenses.map((expense) => serializeExpenseForChat(expense, currentUser.username)),
+        currentUsername: currentUser.username,
+    };
+};
+
+const buildChatPrompt = ({ message, currentUsername, routeSuggestion, searchResults }) => {
+    const context = {
+        appName: 'MilBantKar',
+        currentUsername,
+        allowedRoutes: ROUTE_CATALOG.map((route) => ({ route: route.route, title: route.title })),
+        routeSuggestion: routeSuggestion ? { route: routeSuggestion.route, title: routeSuggestion.title } : null,
+        searchResults,
+        instructions: [
+            'Answer as the MilBantKar assistant.',
+            'Use only the provided app context and search results.',
+            'If the user wants to navigate, set cta to a route from allowedRoutes.',
+            'If the user wants to add a transaction, set actionType to start_transaction.',
+            'If searchResults are provided, summarize them briefly and do not invent extra transactions.',
+            'Return valid JSON only.',
+        ],
+    };
+
+    return `Context:\n${JSON.stringify(context, null, 2)}\n\nUser message:\n${message}`;
+};
+
+const parseGeminiJson = (text) => {
+    const cleaned = String(text || '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+
+    try {
+        return JSON.parse(cleaned);
+    } catch {
+        return null;
+    }
+};
+
+const safeRouteCta = (cta) => {
+    if (!cta || typeof cta !== 'object') {
+        return null;
+    }
+
+    const route = ROUTE_CATALOG.find((candidate) => candidate.route === cta.href || candidate.route === cta.route);
+    if (!route) {
+        return null;
+    }
+
+    return {
+        label: String(cta.label || `Open ${route.title}`),
+        href: route.route,
+    };
+};
+
+const storeChatTurn = async (userId, role, text) => {
+    if (!text) return;
+
+    await Chat.create({
+        userId: String(userId),
+        role,
+        parts: [{ text: String(text) }],
+    });
+};
+
+const createFallbackChatReply = (message, routeSuggestion, searchResults) => {
+    if (routeSuggestion) {
+        return {
+            reply: `I can take you to ${routeSuggestion.title}. Tap the button below.`,
+            cta: { label: `Open ${routeSuggestion.title}`, href: routeSuggestion.route },
+        };
+    }
+
+    if (searchResults.length) {
+        return {
+            reply: `I found ${searchResults.length} matching transaction${searchResults.length === 1 ? '' : 's'}.`,
+            richType: 'searchResults',
+            richData: {
+                query: message,
+                results: searchResults,
+                totalCount: searchResults.length,
+            },
+        };
+    }
+
+    return {
+        reply: 'I can help with events, expenses, settlements, reminders, history, profile, settings, and admin pages. Try asking me to open a page or search your transactions.',
+    };
+};
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -113,6 +303,108 @@ mongoose.connect(MONGO_URI, {
 // Default route
 app.get("/", (req, res) => {
     res.send("🚀 Mil Bant Kar API is running...");
+});
+
+app.post('/api/chat', async (req, res) => {
+    try {
+        const { userId, message } = req.body;
+
+        if (!userId || !String(message || '').trim()) {
+            return res.status(400).json({ message: 'userId and message are required' });
+        }
+
+        const currentUser = await User.findById(userId).select('username _id');
+        if (!currentUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const normalizedMessage = String(message || '').trim();
+        const routeSuggestion = getRouteByAlias(normalizedMessage);
+        const { searchResults, currentUsername } = await buildSearchContext(userId, normalizedMessage);
+        const history = await Chat.find({ userId: String(userId) })
+            .sort({ createdAt: 1 })
+            .select('role parts')
+            .limit(20);
+
+        await storeChatTurn(userId, 'user', normalizedMessage);
+
+        const fallbackPayload = createFallbackChatReply(normalizedMessage, routeSuggestion, searchResults);
+        let payload = { ...fallbackPayload };
+
+        if (genAI) {
+            try {
+                const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+                const chat = model.startChat({
+                    history: history.map((entry) => ({
+                        role: entry.role,
+                        parts: entry.parts,
+                    })),
+                });
+
+                const prompt = buildChatPrompt({
+                    message: normalizedMessage,
+                    currentUsername,
+                    routeSuggestion,
+                    searchResults,
+                });
+
+                const result = await chat.sendMessage(prompt);
+                const responseText = result?.response?.text?.() || '';
+                const parsed = parseGeminiJson(responseText);
+
+                if (parsed && typeof parsed === 'object') {
+                    payload = {
+                        ...fallbackPayload,
+                        ...parsed,
+                    };
+                } else if (responseText.trim()) {
+                    payload = {
+                        ...fallbackPayload,
+                        reply: responseText.trim(),
+                    };
+                }
+            } catch (aiError) {
+                console.error('❌ Gemini chat error:', aiError.message || aiError);
+            }
+        }
+
+        if (routeSuggestion) {
+            payload.cta = safeRouteCta(payload.cta) || {
+                label: `Open ${routeSuggestion.title}`,
+                href: routeSuggestion.route,
+            };
+        } else {
+            payload.cta = safeRouteCta(payload.cta);
+        }
+
+        if (searchResults.length) {
+            payload.richType = 'searchResults';
+            payload.richData = {
+                query: normalizedMessage,
+                results: searchResults,
+                totalCount: searchResults.length,
+                currentUsername,
+            };
+        }
+
+        if (String(payload.actionType || '').toLowerCase() === 'start_transaction') {
+            payload.reply = payload.reply || 'I can help you add that transaction step by step.';
+        }
+
+        const modelReply = String(payload.reply || '').trim();
+        await storeChatTurn(userId, 'model', modelReply || 'Okay.');
+
+        res.status(200).json({
+            reply: modelReply || 'Okay.',
+            actionType: payload.actionType || 'chat',
+            cta: payload.cta || null,
+            richType: payload.richType || null,
+            richData: payload.richData || null,
+        });
+    } catch (error) {
+        console.error('❌ Chat endpoint error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
 });
 
 

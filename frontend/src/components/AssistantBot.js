@@ -189,6 +189,11 @@ const getCurrentUsername = () => {
   return session?.username || localStorage.getItem('username') || '';
 };
 
+const getCurrentUserId = () => {
+  const session = getAuthSession();
+  return session?.userId || localStorage.getItem('userId') || '';
+};
+
 const getUserLabel = (user) => {
   if (!user) return 'Unknown';
   return user.username || 'Unknown';
@@ -380,6 +385,7 @@ function AssistantBot() {
   const [inputValue, setInputValue] = useState('');
   const [messages, setMessages] = useState([DEFAULT_GREETING]);
   const [users, setUsers] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(getCurrentUserId());
   const [currentUsername, setCurrentUsername] = useState(getCurrentUsername());
   const [flowMode, setFlowMode] = useState('idle');
   const [transactionStep, setTransactionStep] = useState(null);
@@ -411,6 +417,7 @@ function AssistantBot() {
 
   useEffect(() => {
     const syncCurrentUser = () => {
+      setCurrentUserId(getCurrentUserId());
       setCurrentUsername(getCurrentUsername());
     };
 
@@ -700,35 +707,99 @@ function AssistantBot() {
     typeNext(0);
   };
 
-  const sendMessage = (messageText) => {
+  const sendMessage = async (messageText) => {
     const trimmed = messageText.trim();
     if (!trimmed) return;
-
-    const replyPayload = createReply(trimmed);
     const userMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const assistantMessageId = `${userMessageId}-reply`;
 
     const userMessage = { id: userMessageId, role: 'user', text: trimmed };
+    setInputValue('');
 
-    if (replyPayload.type === 'start-transaction') {
-      setMessages((prev) => [...prev, userMessage]);
-      setInputValue('');
-      startTransactionFlow();
+    setMessages((prev) => [...prev, userMessage]);
+
+    if (!currentUserId) {
+      const replyPayload = createReply(trimmed);
+
+      if (replyPayload.type === 'start-transaction') {
+        startTransactionFlow();
+        return;
+      }
+
+      appendAssistantMessage(replyPayload);
       return;
     }
 
-    const assistantMessage = {
-      id: assistantMessageId,
-      role: 'assistant',
-      text: '',
-      fullText: replyPayload.text,
-      cta: replyPayload.cta,
-      typing: true,
-    };
+    try {
+      const response = await fetch(`${API_BASE}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: currentUserId,
+          message: trimmed,
+        }),
+      });
 
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
-    setInputValue('');
-    startTypingReply(assistantMessageId, replyPayload.text);
+      let result = null;
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(result?.message || 'Failed to load assistant response');
+      }
+
+      if (String(result?.actionType || '').toLowerCase() === 'start_transaction') {
+        startTransactionFlow();
+        return;
+      }
+
+      const assistantPayload = {
+        text: result?.reply || 'I have a response for you.',
+        cta: result?.cta || null,
+        richType: result?.richType || null,
+        richData: result?.richData || null,
+      };
+
+      const assistantMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        text: '',
+        fullText: assistantPayload.text,
+        cta: assistantPayload.cta,
+        richType: assistantPayload.richType,
+        richData: assistantPayload.richData,
+        typing: true,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+      startTypingReply(assistantMessageId, assistantPayload.text);
+    } catch (error) {
+      const replyPayload = createReply(trimmed);
+
+      if (replyPayload.type === 'start-transaction') {
+        startTransactionFlow();
+        return;
+      }
+
+      const assistantMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        text: '',
+        fullText: replyPayload.text,
+        cta: replyPayload.cta,
+        richType: replyPayload.richType,
+        richData: replyPayload.richData,
+        typing: true,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+      startTypingReply(assistantMessageId, replyPayload.text);
+    }
   };
 
   const handleRouteRedirect = (href) => {
@@ -868,13 +939,6 @@ function AssistantBot() {
       appendUserMessage(trimmed);
       setInputValue('');
       startTransactionFlow();
-      return;
-    }
-
-    if (flowMode === 'search' || HISTORY_INTENT.some((intent) => normalizeText(trimmed).includes(intent))) {
-      appendUserMessage(trimmed);
-      setInputValue('');
-      runHistorySearch(trimmed);
       return;
     }
 
@@ -1998,17 +2062,17 @@ function AssistantBot() {
                       }
 
                       if (topic === 'My transactions') {
-                        handleAssistantAction({ type: 'quick-input', value: 'my-transactions' });
+                        sendMessage(topic);
                         return;
                       }
 
                       if (topic === 'Who did I pay for soda?') {
-                        handleAssistantAction({ type: 'quick-input', value: 'soda-search' });
+                        sendMessage(topic);
                         return;
                       }
 
                       if (topic === 'How much did I spend?') {
-                        handleAssistantAction({ type: 'quick-input', value: 'spent-summary' });
+                        sendMessage(topic);
                         return;
                       }
 
