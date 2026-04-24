@@ -27,6 +27,18 @@ const ROUTE_CATALOG = [
     { route: '/admin', title: 'Admin Panel', aliases: ['admin', 'admin panel'] },
 ];
 
+const NAVIGATION_INTENTS = [
+    'go to', 'open', 'navigate', 'take me', 'took me', 'redirect', 'move to', 'bring me', 'show me', 'direct me', 'route me', 'goto'
+];
+
+const HISTORY_INTENTS = [
+    'history', 'transactions', 'transaction history', 'my transactions', 'who did i pay', 'to whom i paid', 'how much did i spend', 'search transactions', 'find transaction'
+];
+
+const TRANSACTION_ADD_INTENTS = [
+    'add transaction', 'create transaction', 'new transaction', 'make transaction', 'add expense', 'create expense', 'record transaction', 'log transaction'
+];
+
 const normalizeText = (value) => String(value || '')
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, ' ')
@@ -40,6 +52,26 @@ const extractSearchTerms = (query) => normalizeText(query)
 const getRouteByAlias = (message) => {
     const normalizedMessage = normalizeText(message);
     return ROUTE_CATALOG.find((route) => route.aliases.some((alias) => normalizedMessage.includes(alias))) || null;
+};
+
+const hasNavigationIntent = (message) => {
+    const normalizedMessage = normalizeText(message);
+    return NAVIGATION_INTENTS.some((intent) => normalizedMessage.includes(intent));
+};
+
+const isHistoryQuery = (message) => {
+    const normalizedMessage = normalizeText(message);
+    return HISTORY_INTENTS.some((intent) => normalizedMessage.includes(intent));
+};
+
+const isTransactionAddRequest = (message) => {
+    const normalizedMessage = normalizeText(message);
+    return TRANSACTION_ADD_INTENTS.some((intent) => normalizedMessage.includes(intent));
+};
+
+const isGreetingMessage = (message) => {
+    const normalizedMessage = normalizeText(message);
+    return /^(hi|hello|hey|hii|heyy)\b/.test(normalizedMessage);
 };
 
 const expenseMatchesQuery = (expense, query, currentUsername) => {
@@ -104,7 +136,7 @@ const buildSearchContext = async (userId, message) => {
         .limit(100);
 
     const matches = expenses.filter((expense) => expenseMatchesQuery(expense, message, currentUser.username));
-    const selectedExpenses = (matches.length ? matches : expenses.slice(0, 5)).slice(0, 6);
+    const selectedExpenses = matches.slice(0, 6);
 
     return {
         searchResults: selectedExpenses.map((expense) => serializeExpenseForChat(expense, currentUser.username)),
@@ -128,17 +160,35 @@ const safeRouteCta = (cta) => {
     };
 };
 
-const createFallbackChatReply = (message, routeSuggestion, searchResults) => {
+const createFallbackChatReply = (message, routeSuggestion, searchResults, options = {}) => {
+    const { isSearchRequest = false, isAddRequest = false } = options;
+
+    if (isGreetingMessage(message)) {
+        return {
+            reply: 'Hi! I am your MilBantKar assistant. I can help with navigation, transactions, events, and reminders.',
+            actionType: 'chat',
+        };
+    }
+
+    if (isAddRequest) {
+        return {
+            reply: 'Great. I can help you add a transaction step by step.',
+            actionType: 'start_transaction',
+        };
+    }
+
     if (routeSuggestion) {
         return {
             reply: `I can take you to ${routeSuggestion.title}. Tap the button below.`,
+            actionType: 'route',
             cta: { label: `Open ${routeSuggestion.title}`, href: routeSuggestion.route },
         };
     }
 
-    if (searchResults.length) {
+    if (isSearchRequest && searchResults.length) {
         return {
             reply: `I found ${searchResults.length} matching transaction${searchResults.length === 1 ? '' : 's'}.`,
+            actionType: 'chat',
             richType: 'searchResults',
             richData: {
                 query: message,
@@ -148,8 +198,16 @@ const createFallbackChatReply = (message, routeSuggestion, searchResults) => {
         };
     }
 
+    if (isSearchRequest) {
+        return {
+            reply: 'I could not find any matching transactions. Try person name, amount, or a keyword like rent or food.',
+            actionType: 'chat',
+        };
+    }
+
     return {
         reply: 'I can help with events, expenses, settlements, reminders, history, profile, settings, and admin pages. Try asking me to open a page or search your transactions.',
+        actionType: 'chat',
     };
 };
 
@@ -271,9 +329,20 @@ app.post('/api/chat', async (req, res) => {
 
         const normalizedMessage = String(message || '').trim();
         const routeSuggestion = getRouteByAlias(normalizedMessage);
-        const { searchResults, currentUsername } = await buildSearchContext(userId, normalizedMessage);
+        const wantsNavigation = routeSuggestion && hasNavigationIntent(normalizedMessage);
+        const wantsSearch = isHistoryQuery(normalizedMessage) && !wantsNavigation;
+        const wantsAddTransaction = isTransactionAddRequest(normalizedMessage);
 
-        const fallbackPayload = createFallbackChatReply(normalizedMessage, routeSuggestion, searchResults);
+        const searchContext = wantsSearch
+            ? await buildSearchContext(userId, normalizedMessage)
+            : { searchResults: [], currentUsername: currentUser.username };
+
+        const { searchResults, currentUsername } = searchContext;
+
+        const fallbackPayload = createFallbackChatReply(normalizedMessage, routeSuggestion, searchResults, {
+            isSearchRequest: wantsSearch,
+            isAddRequest: wantsAddTransaction,
+        });
         const payload = { ...fallbackPayload };
 
         if (routeSuggestion) {
@@ -285,7 +354,7 @@ app.post('/api/chat', async (req, res) => {
             payload.cta = safeRouteCta(payload.cta);
         }
 
-        if (searchResults.length) {
+        if (wantsSearch && searchResults.length) {
             payload.richType = 'searchResults';
             payload.richData = {
                 query: normalizedMessage,

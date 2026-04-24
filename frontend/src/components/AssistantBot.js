@@ -2,8 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MessageCircle, Send, X, Sparkles, Bot } from 'lucide-react';
 import { getAuthSession } from '../utils/authSession';
 
-const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onrender.com';
-const API_FALLBACK = 'http://localhost:5000';
+const REMOTE_API_BASE = 'https://milbantkar-1.onrender.com';
+const LOCAL_API_BASE = 'http://localhost:5000';
+const REMOTE_CHATBOT_API_BASE = process.env.REACT_APP_CHATBOT_API_BASE_URL || 'https://milbantkar-chatbot.onrender.com';
+const LOCAL_CHATBOT_API_BASE = 'http://localhost:8000';
+const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const API_BASE = process.env.REACT_APP_API_BASE_URL || (isLocalHost ? LOCAL_API_BASE : REMOTE_API_BASE);
+const API_FALLBACK = API_BASE === LOCAL_API_BASE ? REMOTE_API_BASE : LOCAL_API_BASE;
+const CHATBOT_API_BASE = isLocalHost ? LOCAL_CHATBOT_API_BASE : REMOTE_CHATBOT_API_BASE;
+const CHATBOT_API_FALLBACK = CHATBOT_API_BASE === LOCAL_CHATBOT_API_BASE ? REMOTE_CHATBOT_API_BASE : LOCAL_CHATBOT_API_BASE;
 
 const QUICK_TOPICS = [
   'How do I add an expense?',
@@ -146,6 +153,14 @@ const TRANSACTION_ADD_INTENT = [
   'quick transaction',
   'record transaction',
   'log transaction',
+  'mujhe transaction karna hai',
+  'transaction karna hai',
+  'kharcha karna hai',
+  'payment karni hai',
+  'paise dene',
+  'paise bhejne',
+  'send money',
+  'expense karna hai',
 ];
 
 const TRANSACTION_PROMPTS = {
@@ -155,6 +170,16 @@ const TRANSACTION_PROMPTS = {
   description: 'What was it for? You can type skip if you want to leave it blank.',
   date: 'What date should I use? Type YYYY-MM-DD or say today.',
 };
+
+const normalizeTransactionDraft = (draft = {}) => ({
+  paidById: draft.paidById || '',
+  paidByUsername: draft.paidByUsername || '',
+  paidToId: draft.paidToId || '',
+  paidToUsername: draft.paidToUsername || '',
+  amount: draft.amount || '',
+  description: draft.description || '',
+  date: draft.date || new Date().toISOString().split('T')[0],
+});
 
 const STOP_WORDS = new Set([
   'i', 'want', 'to', 'see', 'how', 'much', 'transactions', 'transaction', 'made', 'make', 'add', 'the', 'a', 'an',
@@ -393,6 +418,7 @@ function AssistantBot() {
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const typingTimersRef = useRef(new Map());
+  const chatbotSessionIdRef = useRef(`mbk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
   const [isAtBottom, setIsAtBottom] = useState(true);
 
   const suggestedReplies = useMemo(() => QUICK_TOPICS, []);
@@ -707,18 +733,34 @@ function AssistantBot() {
     typeNext(0);
   };
 
-  const sendMessage = async (messageText) => {
+  const sendMessage = async (messageText, options = {}) => {
+    const { preferLocal = false, skipUserMessage = false, transactionContext = null } = options;
     const trimmed = messageText.trim();
     if (!trimmed) return;
     const userMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const assistantMessageId = `${userMessageId}-reply`;
 
-    const userMessage = { id: userMessageId, role: 'user', text: trimmed };
     setInputValue('');
 
-    setMessages((prev) => [...prev, userMessage]);
+    if (!skipUserMessage) {
+      const userMessage = { id: userMessageId, role: 'user', text: trimmed };
+      setMessages((prev) => [...prev, userMessage]);
+    }
 
-    if (!currentUserId) {
+    if (!preferLocal) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          text: '',
+          fullText: '',
+          typing: true,
+        },
+      ]);
+    }
+
+    if (preferLocal) {
       const replyPayload = createReply(trimmed);
 
       if (replyPayload.type === 'start-transaction') {
@@ -731,30 +773,76 @@ function AssistantBot() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: currentUserId,
-          message: trimmed,
-        }),
-      });
+      const callChat = async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/api/chatbot`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: currentUserId || null,
+            sessionId: chatbotSessionIdRef.current,
+            message: trimmed,
+            conversationType: transactionContext ? 'transaction' : 'chat',
+            transactionStep: transactionContext?.step || null,
+            transactionDraft: transactionContext?.draft || null,
+          }),
+        });
+
+        let result = null;
+        try {
+          result = await response.json();
+        } catch {
+          result = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(result?.message || 'Failed to load assistant response');
+        }
+
+        return result;
+      };
 
       let result = null;
-      try {
-        result = await response.json();
-      } catch {
-        result = null;
-      }
 
-      if (!response.ok) {
-        throw new Error(result?.message || 'Failed to load assistant response');
+      try {
+        result = await callChat(CHATBOT_API_BASE);
+      } catch {
+        result = await callChat(CHATBOT_API_FALLBACK);
       }
 
       if (String(result?.actionType || '').toLowerCase() === 'start_transaction') {
-        startTransactionFlow();
+        const flowData = result?.richData || {};
+
+        if (flowData?.draft) {
+          setTransactionDraft(normalizeTransactionDraft(flowData.draft));
+          setTransactionStep(flowData.nextStep || 'paidBy');
+          setFlowMode('transaction');
+        } else {
+          startTransactionFlow();
+        }
+
+        const isReadyForConfirm = String(result?.richType || '').toLowerCase() === 'transactiondraft';
+
+        const assistantMessage = {
+          id: assistantMessageId,
+          role: 'assistant',
+          text: '',
+          fullText: result?.reply || 'I can help you add that transaction step by step.',
+          cta: result?.cta || null,
+          richType: isReadyForConfirm ? 'transactionDraft' : result?.richType || null,
+          richData: isReadyForConfirm && flowData?.draft
+            ? { draft: buildTransactionCardData(normalizeTransactionDraft(flowData.draft), users), currentUsername }
+            : result?.richData || null,
+          typing: true,
+        };
+
+        setMessages((prev) => prev.map((message) => (
+          message.id === assistantMessageId
+            ? { ...message, cta: assistantMessage.cta, richType: assistantMessage.richType, richData: assistantMessage.richData }
+            : message
+        )));
+        startTypingReply(assistantMessageId, assistantMessage.fullText);
         return;
       }
 
@@ -776,9 +864,23 @@ function AssistantBot() {
         typing: true,
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => prev.map((message) => (
+        message.id === assistantMessageId
+          ? { ...message, cta: assistantMessage.cta, richType: assistantMessage.richType, richData: assistantMessage.richData }
+          : message
+      )));
       startTypingReply(assistantMessageId, assistantPayload.text);
     } catch (error) {
+      if (transactionContext) {
+        if (!transactionContext.step) {
+          startTransactionFlow();
+          return;
+        }
+
+        handleTransactionFlowInput(trimmed);
+        return;
+      }
+
       const replyPayload = createReply(trimmed);
 
       if (replyPayload.type === 'start-transaction') {
@@ -797,7 +899,11 @@ function AssistantBot() {
         typing: true,
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => prev.map((message) => (
+        message.id === assistantMessageId
+          ? { ...message, cta: assistantMessage.cta, richType: assistantMessage.richType, richData: assistantMessage.richData }
+          : message
+      )));
       startTypingReply(assistantMessageId, replyPayload.text);
     }
   };
@@ -824,21 +930,32 @@ function AssistantBot() {
     };
 
     try {
-      const response = await fetch(`${API_BASE}/api/expense/add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const postTransaction = async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/api/expense/add`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        let result = null;
+        try {
+          result = await response.json();
+        } catch {
+          result = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(result?.message || 'Failed to add transaction');
+        }
+
+        return result;
+      };
 
       let result = null;
       try {
-        result = await response.json();
+        result = await postTransaction(API_BASE);
       } catch {
-        result = null;
-      }
-
-      if (!response.ok) {
-        throw new Error(result?.message || 'Failed to add transaction');
+        result = await postTransaction(API_FALLBACK);
       }
 
       const paidBy = users.find((user) => user._id === transactionDraft.paidById) || null;
@@ -878,6 +995,11 @@ function AssistantBot() {
 
   const handleAssistantAction = (action) => {
     if (!action) return;
+
+    if (action.href) {
+      handleRouteRedirect(action.href);
+      return;
+    }
 
     if (action.type === 'route') {
       handleRouteRedirect(action.href);
@@ -929,7 +1051,13 @@ function AssistantBot() {
 
     if (flowMode === 'transaction' && transactionStep) {
       appendUserMessage(trimmed);
-      handleTransactionFlowInput(trimmed);
+      sendMessage(trimmed, {
+        skipUserMessage: true,
+        transactionContext: {
+          step: transactionStep,
+          draft: transactionDraft,
+        },
+      });
       setInputValue('');
       return;
     }
@@ -938,7 +1066,13 @@ function AssistantBot() {
     if (isTransactionAddRequest) {
       appendUserMessage(trimmed);
       setInputValue('');
-      startTransactionFlow();
+      sendMessage(trimmed, {
+        skipUserMessage: true,
+        transactionContext: {
+          step: transactionStep || null,
+          draft: transactionDraft || null,
+        },
+      });
       return;
     }
 
@@ -2078,6 +2212,11 @@ function AssistantBot() {
 
                       if (topic === 'Reset search') {
                         handleAssistantAction({ type: 'quick-input', value: 'reset-search' });
+                        return;
+                      }
+
+                      if (QUICK_TOPICS.includes(topic)) {
+                        sendMessage(topic, { preferLocal: true });
                         return;
                       }
 
