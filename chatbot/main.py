@@ -818,7 +818,9 @@ async def build_transaction_flow_payload(message: str, user_id: Optional[str], s
     )
 
 
-async def build_search_payload(message: str, user_id: Optional[str], session_messages: List[Dict[str, str]]) -> ChatResponse:
+async def build_search_payload(message: str, user_id: Optional[str], session_messages: List[Dict[str, str]], session_id: str) -> ChatResponse:
+    session_meta = get_session_meta(session_id)
+
     try:
         expenses = await fetch_json_with_fallback(["/api/expense"])
     except Exception as exc:
@@ -834,6 +836,7 @@ async def build_search_payload(message: str, user_id: Optional[str], session_mes
     ]
 
     if is_generic_history_query(message):
+        session_meta["awaitingHistoryDetail"] = True
         reply = "Please share one specific detail to search: person name, amount, date, or keyword from description."
         session_messages.append({"role": "assistant", "content": reply})
         session_messages[:] = trim_messages(session_messages)
@@ -849,6 +852,9 @@ async def build_search_payload(message: str, user_id: Optional[str], session_mes
                 "currentUsername": current_username,
             },
         )
+
+    session_meta["awaitingHistoryDetail"] = False
+    session_meta["lastHistoryQuery"] = str(message or "")
 
     relevant_expenses = [expense for expense in current_user_expenses if expense_matches_query(expense, message, current_username)]
 
@@ -898,12 +904,22 @@ class ChatResponse(BaseModel):
 
 
 session_store: Dict[str, List[Dict[str, str]]] = {}
+session_meta_store: Dict[str, Dict[str, Any]] = {}
 
 
 def get_session_messages(session_id: str) -> List[Dict[str, str]]:
     if session_id not in session_store:
         session_store[session_id] = build_initial_messages()
     return session_store[session_id]
+
+
+def get_session_meta(session_id: str) -> Dict[str, Any]:
+    if session_id not in session_meta_store:
+        session_meta_store[session_id] = {
+            "awaitingHistoryDetail": False,
+            "lastHistoryQuery": "",
+        }
+    return session_meta_store[session_id]
 
 
 app = FastAPI(title="MilBantKar Chatbot API", version="1.0.0")
@@ -931,6 +947,7 @@ async def chat(payload: ChatRequest) -> ChatResponse:
 
     session_id = (payload.sessionId or payload.userId or DEFAULT_SESSION_ID).strip() or DEFAULT_SESSION_ID
     messages = get_session_messages(session_id)
+    session_meta = get_session_meta(session_id)
 
     is_transaction_context = str(payload.conversationType or "").lower() == "transaction" or bool(payload.transactionStep or payload.transactionDraft)
 
@@ -946,15 +963,37 @@ async def chat(payload: ChatRequest) -> ChatResponse:
 
     navigation_payload = build_navigation_payload(user_message)
     if navigation_payload:
+        session_meta["awaitingHistoryDetail"] = False
         messages.append({"role": "user", "content": user_message})
         messages.append({"role": "assistant", "content": navigation_payload.reply})
         messages[:] = trim_messages(messages)
         return navigation_payload
 
+    normalized_user_message = normalized_string(user_message)
+    history_followup_markers = [
+        "find it", "find it now", "search it", "look it up", "can you find", "show it",
+        "find now", "search now", "now find",
+    ]
+    is_history_followup = any(marker in normalized_user_message for marker in history_followup_markers)
+
+    if is_history_followup and str(session_meta.get("lastHistoryQuery") or "").strip():
+        messages.append({"role": "user", "content": user_message})
+        messages[:] = trim_messages(messages)
+        return await build_search_payload(str(session_meta.get("lastHistoryQuery") or "").strip(), payload.userId, messages, session_id)
+
+    if session_meta.get("awaitingHistoryDetail"):
+        query_to_search = user_message
+        if is_history_followup and str(session_meta.get("lastHistoryQuery") or "").strip():
+            query_to_search = str(session_meta.get("lastHistoryQuery") or "").strip()
+
+        messages.append({"role": "user", "content": user_message})
+        messages[:] = trim_messages(messages)
+        return await build_search_payload(query_to_search, payload.userId, messages, session_id)
+
     if is_history_query(user_message):
         messages.append({"role": "user", "content": user_message})
         messages[:] = trim_messages(messages)
-        return await build_search_payload(user_message, payload.userId, messages)
+        return await build_search_payload(user_message, payload.userId, messages, session_id)
 
     messages.append({"role": "user", "content": user_message})
     messages[:] = trim_messages(messages)
