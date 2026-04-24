@@ -147,8 +147,31 @@ def extract_search_terms(query: str) -> List[str]:
         "for", "of", "and", "what", "who", "did", "paid", "pay", "spent", "spend",
         "transactions", "transaction", "with", "on", "in", "from", "all", "show",
         "find", "search", "history", "expense", "expenses", "please", "could", "you",
+        "specific", "particular", "any", "some", "one",
     }
     return [term for term in normalized_string(query).split() if term and term not in stop_words]
+
+
+def is_generic_history_query(message: str) -> bool:
+    normalized_query = normalized_string(message)
+    terms = extract_search_terms(message)
+
+    generic_markers = [
+        "specific transaction",
+        "find transaction",
+        "search transaction",
+        "show transactions",
+        "my transactions",
+        "transaction history",
+        "history",
+    ]
+
+    has_generic_marker = any(marker in normalized_query for marker in generic_markers)
+    has_amount = bool(re.search(r"\b\d+(?:\.\d{1,2})?\b", normalized_query))
+    has_iso_date = bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b", normalized_query))
+    has_slash_date = bool(re.search(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b", normalized_query))
+
+    return bool(has_generic_marker and not terms and not has_amount and not has_iso_date and not has_slash_date)
 
 
 def is_history_query(message: str) -> bool:
@@ -161,6 +184,74 @@ def is_history_query(message: str) -> bool:
         "paid for", "paid to", "paid by", "whom i paid", "whom did i pay",
     ]
     return any(marker in lowered for marker in history_markers)
+
+
+def detect_navigation_target(message: str) -> Optional[Dict[str, Any]]:
+    normalized = normalized_string(message)
+    if not normalized:
+        return None
+
+    navigation_intents = [
+        "go to", "go to the", "open", "navigate", "take me", "taken me", "took me",
+        "redirect", "move to", "bring me", "show me", "direct me", "route me", "goto",
+    ]
+
+    pages: List[Dict[str, Any]] = [
+        {"route": "/events", "title": "Events", "matchers": ["event page", "events page", "events", "event"], "steps": ["Dashboard", "Top menu", "Events"]},
+        {"route": "/dashboard", "title": "Dashboard", "matchers": ["dashboard"], "steps": ["Top menu", "Dashboard"]},
+        {"route": "/history", "title": "History", "matchers": ["history page", "history"], "steps": ["Top menu", "History"]},
+        {"route": "/budget", "title": "Budget", "matchers": ["budget page", "budget"], "steps": ["Top menu", "Budget"]},
+        {"route": "/profile", "title": "Profile", "matchers": ["profile page", "my profile", "profile"], "steps": ["Top-right avatar", "My Profile"]},
+        {"route": "/settings", "title": "Settings", "matchers": ["settings page", "settings"], "steps": ["Top-right avatar", "Settings"]},
+        {"route": "/help", "title": "Help", "matchers": ["help page", "support page", "help", "support"], "steps": ["Top-right avatar", "Help & Support"]},
+        {"route": "/transaction", "title": "Transaction", "matchers": ["transaction page", "transactions page"], "steps": ["Top menu", "Transaction"]},
+        {"route": "/visualise", "title": "Visualise", "matchers": ["visualise page", "visualize page", "visualise", "visualize"], "steps": ["Top menu", "Visualise"]},
+        {"route": "/scanner", "title": "QR Scanner", "matchers": ["scanner page", "qr scanner", "scanner"], "steps": ["Top-right avatar", "Scanner"]},
+        {"route": "/calculate", "title": "Calculate", "matchers": ["calculate page", "calculator page", "calculate", "calculator"], "steps": ["Top menu", "Calculate"]},
+        {"route": "/admin", "title": "Admin Panel", "matchers": ["admin page", "admin panel", "admin"], "steps": ["Top-right avatar", "Admin Panel"]},
+    ]
+
+    target_page = next((page for page in pages if any(matcher in normalized for matcher in page["matchers"])), None)
+    if not target_page:
+        return None
+
+    has_navigation_intent = any(intent in normalized for intent in navigation_intents)
+    token_count = len(normalized.split())
+    looks_like_navigation = has_navigation_intent or "page" in normalized or token_count <= 5
+    if not looks_like_navigation:
+        return None
+
+    # If user asks for history with search details, treat it as search, not page navigation.
+    if target_page["route"] == "/history":
+        history_search_markers = [
+            "transaction with", "expense with", "what did i spend", "who did i pay", "to whom i paid",
+            "paid to", "paid by", "spent on", "find transaction", "search transaction", "amount", "keyword",
+        ]
+        has_date_or_amount = bool(re.search(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d+(?:\.\d{1,2})?\b", normalized))
+        if any(marker in normalized for marker in history_search_markers) or has_date_or_amount:
+            return None
+
+    return target_page
+
+
+def build_navigation_payload(message: str) -> Optional["ChatResponse"]:
+    target_page = detect_navigation_target(message)
+    if not target_page:
+        return None
+
+    path_text = " -> ".join(target_page["steps"])
+    reply = (
+        f"Sure. I can take you to the {target_page['title']} page.\n"
+        f"Path: {path_text}\n"
+        "Tap the button below to continue."
+    )
+    return ChatResponse(
+        reply=reply,
+        actionType="chat",
+        cta={"label": f"Open {target_page['title']}", "href": target_page["route"]},
+        richType=None,
+        richData=None,
+    )
 
 
 def expense_matches_query(expense: dict, query: str, current_username: str = "") -> bool:
@@ -176,10 +267,20 @@ def expense_matches_query(expense: dict, query: str, current_username: str = "")
     )
 
     search_terms = extract_search_terms(query)
-    wants_my_transactions = (
-        ("my" in normalized_query or "i" in normalized_query or "me" in normalized_query)
-        and any(token in normalized_query for token in ["transaction", "transactions", "spent", "spend", "paid"])
-    ) or "transactions i made" in normalized_query
+    wants_my_transactions = any(
+        phrase in normalized_query
+        for phrase in [
+            "my transactions",
+            "transactions i made",
+            "what did i spend",
+            "who did i pay",
+            "to whom i paid",
+            "for whom i paid",
+            "for whom did i pay",
+            "whom i paid",
+            "whom did i pay",
+        ]
+    )
 
     paid_by_username = ""
     paid_to_username = ""
@@ -199,7 +300,7 @@ def expense_matches_query(expense: dict, query: str, current_username: str = "")
     if not search_terms:
         return bool(searchable_text and normalized_query and normalized_query in searchable_text)
 
-    return any(term in searchable_text for term in search_terms)
+    return all(term in searchable_text for term in search_terms)
 
 
 def get_transaction_type(expense: dict, current_username: str) -> str:
@@ -732,32 +833,27 @@ async def build_search_payload(message: str, user_id: Optional[str], session_mes
         if expense_belongs_to_user(expense, user_id, current_username)
     ]
 
-    simplified_transactions = [
-        simplify_expense_for_ai(expense, current_username)
-        for expense in current_user_expenses[:80]
-    ]
+    if is_generic_history_query(message):
+        reply = "Please share one specific detail to search: person name, amount, date, or keyword from description."
+        session_messages.append({"role": "assistant", "content": reply})
+        session_messages[:] = trim_messages(session_messages)
+        return ChatResponse(
+            reply=reply,
+            actionType="chat",
+            cta=None,
+            richType="searchResults",
+            richData={
+                "query": message,
+                "results": [],
+                "totalCount": 0,
+                "currentUsername": current_username,
+            },
+        )
 
-    ai_selected_ids: List[str] = []
-    ai_reply = ""
-
-    try:
-        ai_result = await build_history_ai_selection(message, current_username, simplified_transactions)
-        ai_selected_ids = [str(item) for item in (ai_result.get("selectedIds") or []) if str(item).strip()]
-        ai_reply = str(ai_result.get("reply") or "").strip()
-    except Exception:
-        ai_selected_ids = []
-        ai_reply = ""
-
-    if ai_selected_ids:
-        lookup = {str(expense.get("_id") or ""): expense for expense in current_user_expenses}
-        relevant_expenses = [lookup[item_id] for item_id in ai_selected_ids if item_id in lookup]
-    else:
-        relevant_expenses = [expense for expense in current_user_expenses if expense_matches_query(expense, message, current_username)]
+    relevant_expenses = [expense for expense in current_user_expenses if expense_matches_query(expense, message, current_username)]
 
     serialized_results = [serialize_expense_for_chat(expense, current_username) for expense in relevant_expenses[:5]]
-    reply = ai_reply or summarize_search_results(relevant_expenses, message, current_username)
-    if not reply:
-        reply = summarize_search_results(relevant_expenses, message, current_username)
+    reply = summarize_search_results(relevant_expenses, message, current_username)
 
     session_messages.append({"role": "assistant", "content": reply})
     session_messages[:] = trim_messages(session_messages)
@@ -847,6 +943,13 @@ async def chat(payload: ChatRequest) -> ChatResponse:
             payload.transactionStep,
             payload.transactionDraft,
         )
+
+    navigation_payload = build_navigation_payload(user_message)
+    if navigation_payload:
+        messages.append({"role": "user", "content": user_message})
+        messages.append({"role": "assistant", "content": navigation_payload.reply})
+        messages[:] = trim_messages(messages)
+        return navigation_payload
 
     if is_history_query(user_message):
         messages.append({"role": "user", "content": user_message})
