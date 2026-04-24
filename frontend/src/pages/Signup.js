@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 function Signup() {
     const [formData, setFormData] = useState({
@@ -690,7 +691,7 @@ function Signup() {
                   <div className="form-check mb-4">
                     <input className="form-check-input" type="checkbox" id="terms" required />
                     <label className="form-check-label text-muted" htmlFor="terms">
-                      I agree to the <a href="/terms-of-service" className="link-primary text-decoration-none">Terms of Service</a> and <a href="/privacy-policy" className="link-primary text-decoration-none">Privacy Policy</a>
+                      I agree to the <Link to="/terms-of-service" className="link-primary text-decoration-none">Terms of Service</Link> and <Link to="/privacy-policy" className="link-primary text-decoration-none">Privacy Policy</Link>
                     </label>
                   </div>
   
@@ -711,7 +712,7 @@ function Signup() {
   
                   <div className="text-center">
                     <span className="text-muted">Already have an account? </span>
-                    <a href="/login" className="link-primary text-decoration-none fw-semibold">Sign in</a>
+                    <Link to="/login" className="link-primary text-decoration-none fw-semibold">Sign in</Link>
                   </div>
                 </form>
                 </div>

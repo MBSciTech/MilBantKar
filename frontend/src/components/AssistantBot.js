@@ -4,7 +4,7 @@ import { getAuthSession } from '../utils/authSession';
 
 const REMOTE_API_BASE = 'https://milbantkar-1.onrender.com';
 const LOCAL_API_BASE = 'http://localhost:5000';
-const REMOTE_CHATBOT_API_BASE = process.env.REACT_APP_CHATBOT_API_BASE_URL || 'https://milbantkar-chatbot.onrender.com';
+const REMOTE_CHATBOT_API_BASE = process.env.REACT_APP_CHATBOT_API_BASE_URL || 'https://milbantkar-2.onrender.com';
 const LOCAL_CHATBOT_API_BASE = 'http://localhost:8000';
 const isLocalHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const API_BASE = process.env.REACT_APP_API_BASE_URL || (isLocalHost ? LOCAL_API_BASE : REMOTE_API_BASE);
@@ -128,19 +128,6 @@ const NAVIGATION_INTENT = [
   'i wanna',
   'let me',
   'goto',
-];
-
-const HISTORY_INTENT = [
-  'history',
-  'see how much',
-  'how much transactions',
-  'my transactions',
-  'transactions i made',
-  'what did i spend',
-  'who did i pay',
-  'to whom i paid',
-  'search transactions',
-  'find transaction',
 ];
 
 const TRANSACTION_ADD_INTENT = [

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { getAuthSession, saveAuthSession } from '../utils/authSession';
 
 function Login() {
@@ -838,7 +839,7 @@ function Login() {
 
                   <div className="text-center">
                   <span className="text-muted">Don't have an account? </span>
-                    <a href="/signup" className="link-primary text-decoration-none fw-semibold">Sign up</a>
+                    <Link to="/signup" className="link-primary text-decoration-none fw-semibold">Sign up</Link>
                 </div>
 
                   <div className="security-note">
