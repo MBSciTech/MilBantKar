@@ -17,7 +17,7 @@ import uvicorn
 
 load_dotenv()
 
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 MAX_TURNS = int(os.getenv("CHATBOT_MAX_TURNS", "20"))
 DEFAULT_SESSION_ID = "default"
 BACKEND_API_BASE = os.getenv("MILBANTKAR_BACKEND_API_BASE_URL", "http://localhost:5000")
