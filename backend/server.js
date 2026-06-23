@@ -128,7 +128,8 @@ const buildSearchContext = async (userId, message) => {
     }
 
     const expenses = await ExpenseLog.find({
-        $or: [{ paidBy: userId }, { paidTo: userId }]
+        $or: [{ paidBy: userId }, { paidTo: userId }],
+        deletedAt: null
     })
         .populate('paidBy', 'username _id profilePic')
         .populate('paidTo', 'username _id profilePic')
@@ -708,7 +709,7 @@ app.post('/api/expense/add', async (req, res) => {
 // Fetch all expenses with usernames populated
 app.get("/api/expense", async (req, res) => {
     try {
-      const expenses = await expenceLog.find()
+      const expenses = await expenceLog.find({ deletedAt: null })
                 .populate("paidBy", "username _id profilePic")
                 .populate("paidTo", "username _id profilePic");
 
@@ -1218,7 +1219,7 @@ app.get('/api/admin/events', isAdmin, async (req, res) => {
 // Admin: Get all expenses with populated data
 app.get('/api/admin/expenses', isAdmin, async (req, res) => {
     try {
-        const expenses = await ExpenseLog.find()
+        const expenses = await ExpenseLog.find({ deletedAt: null })
             .populate("paidBy", "username")
             .populate("paidTo", "username")
             .sort({ createdAt: -1 });
@@ -1400,17 +1401,58 @@ app.delete('/api/admin/events/:id', isAdmin, async (req, res) => {
     }
 });
 
+// Admin: Edit expense
+app.put('/api/admin/expenses/:id', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { paidBy, paidTo, amount, description, date, status } = req.body;
+        
+        const expense = await ExpenseLog.findById(id);
+        if (!expense) {
+            return res.status(404).json({ message: "Expense not found" });
+        }
+        
+        if (paidBy !== undefined) expense.paidBy = paidBy;
+        if (paidTo !== undefined) expense.paidTo = paidTo;
+        if (amount !== undefined) expense.amount = amount;
+        if (description !== undefined) expense.description = description;
+        if (date !== undefined) expense.date = date;
+        
+        if (status !== undefined) {
+            expense.status = status;
+            if (!expense.settlementConfirmation) {
+                expense.settlementConfirmation = {};
+            }
+            if (status === true) {
+                expense.settlementConfirmation.paidByConfirmed = true;
+                expense.settlementConfirmation.paidToConfirmed = true;
+                expense.settlementConfirmation.paidByConfirmedAt = expense.settlementConfirmation.paidByConfirmedAt || new Date();
+                expense.settlementConfirmation.paidToConfirmedAt = expense.settlementConfirmation.paidToConfirmedAt || new Date();
+            } else {
+                expense.settlementConfirmation.paidByConfirmed = false;
+                expense.settlementConfirmation.paidToConfirmed = false;
+            }
+        }
+        
+        const updatedExpense = await expense.save();
+        res.status(200).json({ message: "Expense updated successfully", expense: updatedExpense });
+    } catch (error) {
+        console.error("❌ Error updating expense:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
 // Admin: Delete expense
 app.delete('/api/admin/expenses/:id', isAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
-        const deletedExpense = await ExpenseLog.findByIdAndDelete(id);
+        const deletedExpense = await ExpenseLog.findByIdAndUpdate(id, { deletedAt: new Date() });
         if (!deletedExpense) {
             return res.status(404).json({ message: "Expense not found" });
         }
         
-        res.status(200).json({ message: "Expense deleted successfully" });
+        res.status(200).json({ message: "Expense marked for deletion (will be removed in 30 days)" });
     } catch (error) {
         console.error("❌ Error deleting expense:", error);
         res.status(500).json({ message: "Server error" });

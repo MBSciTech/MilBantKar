@@ -19,6 +19,8 @@ function AdminPanel() {
     const [showUserForm, setShowUserForm] = useState(false);
     const [showEventForm, setShowEventForm] = useState(false);
     const [showPollForm, setShowPollForm] = useState(false);
+    const [showExpenseForm, setShowExpenseForm] = useState(false);
+    const [expenseSearchTerm, setExpenseSearchTerm] = useState('');
     const [editingItem, setEditingItem] = useState(null);
     const [userForm, setUserForm] = useState({
         username: '',
@@ -38,6 +40,14 @@ function AdminPanel() {
         message: '',
         receiver: '',
         options: ['', '']
+    });
+    const [expenseForm, setExpenseForm] = useState({
+        paidBy: '',
+        paidTo: '',
+        amount: '',
+        description: '',
+        date: '',
+        status: false
     });
 
     useEffect(() => {
@@ -184,6 +194,42 @@ function AdminPanel() {
         }
     };
 
+    const handleExpenseSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const adminUsername = localStorage.getItem('username');
+            const headers = {
+                'Content-Type': 'application/json',
+                'adminUsername': adminUsername
+            };
+
+            const url = `${API_BASE}/api/admin/expenses/${editingItem._id}`;
+            const method = 'PUT';
+            
+            const response = await fetch(url, {
+                method,
+                headers,
+                body: JSON.stringify(expenseForm)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to save expense');
+            }
+            
+            setSuccess('Expense updated successfully');
+            setShowExpenseForm(false);
+            setEditingItem(null);
+            setExpenseForm({ paidBy: '', paidTo: '', amount: '', description: '', date: '', status: false });
+            fetchAllData();
+        } catch (err) {
+            setError(err.message || 'Failed to save expense');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handlePollOptionChange = (index, value) => {
         setPollForm(prev => ({
             ...prev,
@@ -254,7 +300,13 @@ function AdminPanel() {
     const handleDelete = async (type, id) => {
         if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
         
-        setLoading(true);
+        // Optimistic UI update for fast response
+        if (type === 'users') setUsers(prev => prev.filter(item => item._id !== id));
+        if (type === 'events') setEvents(prev => prev.filter(item => item._id !== id));
+        if (type === 'expenses') setExpenses(prev => prev.filter(item => item._id !== id));
+        if (type === 'alerts') setAlerts(prev => prev.filter(item => item._id !== id));
+        if (type === 'polls') setPolls(prev => prev.filter(item => item._id !== id));
+
         try {
             const adminUsername = localStorage.getItem('username');
             const headers = {
@@ -272,11 +324,9 @@ function AdminPanel() {
             }
             
             setSuccess(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully`);
-            fetchAllData();
         } catch (err) {
             setError(err.message || `Failed to delete ${type}`);
-        } finally {
-            setLoading(false);
+            fetchAllData(); // Revert state on failure
         }
     };
 
@@ -300,6 +350,16 @@ function AdminPanel() {
                 isClosed: item.isClosed || false
             });
             setShowEventForm(true);
+        } else if (type === 'expense') {
+            setExpenseForm({
+                paidBy: item.paidBy?._id || item.paidBy || '',
+                paidTo: item.paidTo?._id || item.paidTo || '',
+                amount: item.amount || 0,
+                description: item.description || '',
+                date: item.date ? new Date(item.date).toISOString().split('T')[0] : '',
+                status: item.status || false
+            });
+            setShowExpenseForm(true);
         }
     };
 
@@ -314,6 +374,16 @@ function AdminPanel() {
             return () => clearTimeout(timer);
         }
     }, [error, success]);
+
+    const filteredExpenses = expenses.filter(expense => {
+        if (!expenseSearchTerm) return true;
+        const term = expenseSearchTerm.toLowerCase();
+        const paidBy = (expense.paidBy?.username || '').toLowerCase();
+        const paidTo = (expense.paidTo?.username || '').toLowerCase();
+        const desc = (expense.description || '').toLowerCase();
+        const amount = String(expense.amount || '').toLowerCase();
+        return paidBy.includes(term) || paidTo.includes(term) || desc.includes(term) || amount.includes(term);
+    });
 
     if (loading && users.length === 0) {
         return (
@@ -413,17 +483,17 @@ function AdminPanel() {
                                 <tbody>
                                     {users.map(user => (
                                         <tr key={user._id}>
-                                            <td>
+                                            <td data-label="Profile">
                                                 <img 
                                                     src={user.profilePic || `https://ui-avatars.com/api/?name=${user.username}&background=random&color=fff&size=40`}
                                                     alt={user.username}
                                                     className="user-avatar"
                                                 />
                                             </td>
-                                            <td>{user.username || 'N/A'}</td>
-                                            <td>{user.email}</td>
-                                            <td>{user.phone || 'N/A'}</td>
-                                            <td>
+                                            <td data-label="Username">{user.username || 'N/A'}</td>
+                                            <td data-label="Email">{user.email}</td>
+                                            <td data-label="Phone">{user.phone || 'N/A'}</td>
+                                            <td data-label="Password">
                                                 <span style={{ fontFamily: 'monospace' }}>
                                                     {showPasswords[user._id] ? (user.passwordHash || 'N/A') : '********'}
                                                 </span>
@@ -436,13 +506,13 @@ function AdminPanel() {
                                                     <i className={`fas ${showPasswords[user._id] ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                                                 </button>
                                             </td>
-                                            <td>
+                                            <td data-label="Role">
                                                 <span className={`badge ${user.isAdmin ? 'admin' : 'user'}`}>
                                                     {user.isAdmin ? 'Admin' : 'User'}
                                                 </span>
                                             </td>
-                                            <td>{new Date(user.createdAt).toLocaleDateString()}</td>
-                                            <td>
+                                            <td data-label="Joined">{new Date(user.createdAt).toLocaleDateString()}</td>
+                                            <td data-label="Actions">
                                                 <button 
                                                     className="btn-edit"
                                                     onClick={() => handleEdit('user', user)}
@@ -498,18 +568,18 @@ function AdminPanel() {
                                 <tbody>
                                     {events.map(event => (
                                         <tr key={event._id}>
-                                            <td>{event.name}</td>
-                                            <td>{event.description || 'N/A'}</td>
-                                            <td><code>{event.code}</code></td>
-                                            <td>{event.createdBy?.username || 'N/A'}</td>
-                                            <td>{event.participants?.length || 0}</td>
-                                            <td>
+                                            <td data-label="Name">{event.name}</td>
+                                            <td data-label="Description">{event.description || 'N/A'}</td>
+                                            <td data-label="Code"><code>{event.code}</code></td>
+                                            <td data-label="Created By">{event.createdBy?.username || 'N/A'}</td>
+                                            <td data-label="Participants">{event.participants?.length || 0}</td>
+                                            <td data-label="Status">
                                                 <span className={`badge ${event.isClosed ? 'closed' : 'active'}`}>
                                                     {event.isClosed ? 'Closed' : 'Active'}
                                                 </span>
                                             </td>
-                                            <td>{new Date(event.createdAt).toLocaleDateString()}</td>
-                                            <td>
+                                            <td data-label="Date">{new Date(event.createdAt).toLocaleDateString()}</td>
+                                            <td data-label="Actions">
                                                 <button 
                                                     className="btn-edit"
                                                     onClick={() => handleEdit('event', event)}
@@ -536,6 +606,15 @@ function AdminPanel() {
                     <div className="tab-content">
                         <div className="content-header">
                             <h2>Expense Management</h2>
+                            <div className="admin-search-bar">
+                                <i className="fas fa-search"></i>
+                                <input
+                                    type="text"
+                                    placeholder="Search expenses..."
+                                    value={expenseSearchTerm}
+                                    onChange={(e) => setExpenseSearchTerm(e.target.value)}
+                                />
+                            </div>
                         </div>
 
                         <div className="data-table">
@@ -552,19 +631,25 @@ function AdminPanel() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {expenses.map(expense => (
+                                    {filteredExpenses.map(expense => (
                                         <tr key={expense._id}>
-                                            <td>{expense.paidBy?.username || 'N/A'}</td>
-                                            <td>{expense.paidTo?.username || 'N/A'}</td>
-                                            <td>₹{expense.amount?.toFixed(2)}</td>
-                                            <td>{expense.description || 'N/A'}</td>
-                                            <td>
+                                            <td data-label="Paid By">{expense.paidBy?.username || 'N/A'}</td>
+                                            <td data-label="Paid To">{expense.paidTo?.username || 'N/A'}</td>
+                                            <td data-label="Amount">₹{expense.amount?.toFixed(2)}</td>
+                                            <td data-label="Description">{expense.description || 'N/A'}</td>
+                                            <td data-label="Status">
                                                 <span className={`badge ${expense.status ? 'settled' : 'pending'}`}>
                                                     {expense.status ? 'Settled' : 'Pending'}
                                                 </span>
                                             </td>
-                                            <td>{new Date(expense.date).toLocaleDateString()}</td>
-                                            <td>
+                                            <td data-label="Date">{new Date(expense.date).toLocaleDateString()}</td>
+                                            <td data-label="Actions">
+                                                <button 
+                                                    className="btn-edit"
+                                                    onClick={() => handleEdit('expense', expense)}
+                                                >
+                                                    <i className="fas fa-edit"></i>
+                                                </button>
                                                 <button 
                                                     className="btn-delete"
                                                     onClick={() => handleDelete('expenses', expense._id)}
@@ -603,21 +688,21 @@ function AdminPanel() {
                                 <tbody>
                                     {alerts.map(alert => (
                                         <tr key={alert._id}>
-                                            <td>{alert.sender?.username || 'N/A'}</td>
-                                            <td>{alert.receiver?.username || 'All'}</td>
-                                            <td>{alert.message}</td>
-                                            <td>
+                                            <td data-label="Sender">{alert.sender?.username || 'N/A'}</td>
+                                            <td data-label="Receiver">{alert.receiver?.username || 'All'}</td>
+                                            <td data-label="Message">{alert.message}</td>
+                                            <td data-label="Type">
                                                 <span className={`badge ${alert.type}`}>
                                                     {alert.type}
                                                 </span>
                                             </td>
-                                            <td>
+                                            <td data-label="Seen">
                                                 <span className={`badge ${alert.seen ? 'seen' : 'unseen'}`}>
                                                     {alert.seen ? 'Seen' : 'Unseen'}
                                                 </span>
                                             </td>
-                                            <td>{new Date(alert.createdAt).toLocaleDateString()}</td>
-                                            <td>
+                                            <td data-label="Date">{new Date(alert.createdAt).toLocaleDateString()}</td>
+                                            <td data-label="Actions">
                                                 <button 
                                                     className="btn-delete"
                                                     onClick={() => handleDelete('alerts', alert._id)}
@@ -666,9 +751,9 @@ function AdminPanel() {
                                         const totalVotes = (poll.pollOptions || []).reduce((sum, option) => sum + (option.votes?.length || 0), 0);
                                         return (
                                             <tr key={poll._id}>
-                                                <td>{poll.message}</td>
-                                                <td>{poll.receiver?.username || 'All Users'}</td>
-                                                <td>
+                                                <td data-label="Question">{poll.message}</td>
+                                                <td data-label="Audience">{poll.receiver?.username || 'All Users'}</td>
+                                                <td data-label="Options">
                                                     <div style={{ display: 'grid', gap: '4px' }}>
                                                         {(poll.pollOptions || []).map((option, index) => (
                                                             <span key={`${poll._id}-${index}`}>
@@ -677,9 +762,9 @@ function AdminPanel() {
                                                         ))}
                                                     </div>
                                                 </td>
-                                                <td>{totalVotes}</td>
-                                                <td>{new Date(poll.createdAt).toLocaleString()}</td>
-                                                <td>
+                                                <td data-label="Total Votes">{totalVotes}</td>
+                                                <td data-label="Created">{new Date(poll.createdAt).toLocaleString()}</td>
+                                                <td data-label="Actions">
                                                     <button
                                                         className="btn-delete"
                                                         onClick={() => handleDelete('polls', poll._id)}
@@ -922,6 +1007,103 @@ function AdminPanel() {
                                         {loading ? 'Publishing...' : 'Publish Poll'}
                                     </button>
                                 </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Expense Form Modal */}
+            {showExpenseForm && (
+                <div className="modal-overlay">
+                    <div className="modal">
+                        <div className="modal-header">
+                            <h3>Edit Expense</h3>
+                            <button
+                                className="btn-close"
+                                onClick={() => {
+                                    setShowExpenseForm(false);
+                                    setEditingItem(null);
+                                }}
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <form onSubmit={handleExpenseSubmit} className="modal-form">
+                            <div className="form-group">
+                                <label>Paid By</label>
+                                <select
+                                    value={expenseForm.paidBy}
+                                    onChange={(e) => setExpenseForm({ ...expenseForm, paidBy: e.target.value })}
+                                    required
+                                >
+                                    <option value="">Select User</option>
+                                    {users.map(user => (
+                                        <option key={user._id} value={user._id}>{user.username}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Paid To</label>
+                                <select
+                                    value={expenseForm.paidTo}
+                                    onChange={(e) => setExpenseForm({ ...expenseForm, paidTo: e.target.value })}
+                                    required
+                                >
+                                    <option value="">Select User</option>
+                                    {users.map(user => (
+                                        <option key={user._id} value={user._id}>{user.username}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Amount (₹)</label>
+                                <input
+                                    type="number"
+                                    value={expenseForm.amount}
+                                    onChange={(e) => setExpenseForm({ ...expenseForm, amount: Number(e.target.value) })}
+                                    required
+                                    min="0"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Description</label>
+                                <input
+                                    type="text"
+                                    value={expenseForm.description}
+                                    onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Date</label>
+                                <input
+                                    type="date"
+                                    value={expenseForm.date}
+                                    onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Status</label>
+                                <select
+                                    value={expenseForm.status ? "true" : "false"}
+                                    onChange={(e) => setExpenseForm({ ...expenseForm, status: e.target.value === "true" })}
+                                >
+                                    <option value="false">Pending</option>
+                                    <option value="true">Settled</option>
+                                </select>
+                            </div>
+                            <div className="modal-actions">
+                                <button type="button" className="btn-secondary" onClick={() => {
+                                    setShowExpenseForm(false);
+                                    setEditingItem(null);
+                                }}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn-primary" disabled={loading}>
+                                    {loading ? 'Saving...' : 'Save Changes'}
+                                </button>
                             </div>
                         </form>
                     </div>

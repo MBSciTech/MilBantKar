@@ -48,8 +48,14 @@ const expenseLogSchema = new mongoose.Schema(
         type: Date,
         default: null
       }
+    },
+    deletedAt: {
+      type: Date,
+      default: null
     }
   }
 );
+
+expenseLogSchema.index({ deletedAt: 1 }, { expireAfterSeconds: 2592000 });
 
 module.exports = mongoose.model('ExpenseLog', expenseLogSchema);
