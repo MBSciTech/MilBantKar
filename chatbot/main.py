@@ -11,19 +11,22 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from groq import Groq
+from openai import OpenAI
 from pydantic import BaseModel
 import uvicorn
 
 load_dotenv()
 
-MODEL_NAME = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 MAX_TURNS = int(os.getenv("CHATBOT_MAX_TURNS", "20"))
 DEFAULT_SESSION_ID = "default"
 BACKEND_API_BASE = os.getenv("MILBANTKAR_BACKEND_API_BASE_URL", "http://localhost:5000")
 BACKEND_API_FALLBACK = os.getenv("MILBANTKAR_BACKEND_API_FALLBACK_URL", "https://milbantkar-1.onrender.com")
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = OpenAI(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+)
 
 APP_REQUIREMENTS = """
 You are the official MilBantKar assistant.
