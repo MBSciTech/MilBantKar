@@ -43,6 +43,10 @@ function EventPage() {
     const [showExpenseDetails, setShowExpenseDetails] = useState(null);
     const [showQuickActions, setShowQuickActions] = useState(false);
 
+    // Expense view mode: 'individual' or 'group'
+    const [expenseViewMode, setExpenseViewMode] = useState('individual');
+    const [expandedGroups, setExpandedGroups] = useState({});
+
     // QR Code state
     const [showQRCode, setShowQRCode] = useState(false);
 
@@ -781,6 +785,43 @@ function EventPage() {
     const displayExpenses = searchTerm || selectedCategory !== 'all' ? filteredExpenses : (event.expenses || []);
     const userRole = getUserRole();
 
+    // Group expenses by paidBy + description + date (rounded to minute)
+    const groupExpenses = (expenses) => {
+        const groups = {};
+        const sorted = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+        sorted.forEach(expense => {
+            const paidById = expense.paidBy?._id || 'unknown';
+            const desc = (expense.description || 'No description').trim();
+            const dateObj = new Date(expense.date);
+            const dateKey = `${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()}-${dateObj.getHours()}-${dateObj.getMinutes()}`;
+            const key = `${paidById}__${desc}__${dateKey}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    key,
+                    paidBy: expense.paidBy,
+                    description: desc,
+                    date: expense.date,
+                    totalAmount: 0,
+                    splits: []
+                };
+            }
+            groups[key].totalAmount += expense.amount || 0;
+            groups[key].splits.push({
+                paidTo: expense.paidTo,
+                amount: expense.amount,
+                status: expense.status,
+                _id: expense._id
+            });
+        });
+        return Object.values(groups).sort((a, b) => new Date(b.date) - new Date(a.date));
+    };
+
+    const toggleGroupExpand = (key) => {
+        setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const groupedExpenses = groupExpenses(displayExpenses);
+
     return (
         <div className="event-page">
             {/* Enhanced Animated Background */}
@@ -1457,8 +1498,28 @@ function EventPage() {
                                     <span className="total-amount">Total: ₹{getTotalExpenses().toFixed(2)}</span>
                                 </div>
                             </div>
+
+                                    {/* Expense View Toggle */}
+                                    <div className="expense-view-toggle">
+                                        <button
+                                            className={`view-toggle-btn ${expenseViewMode === 'individual' ? 'active' : ''}`}
+                                            onClick={() => setExpenseViewMode('individual')}
+                                        >
+                                            <i className="fas fa-list"></i>
+                                            Individual
+                                        </button>
+                                        <button
+                                            className={`view-toggle-btn ${expenseViewMode === 'group' ? 'active' : ''}`}
+                                            onClick={() => setExpenseViewMode('group')}
+                                        >
+                                            <i className="fas fa-layer-group"></i>
+                                            Grouped
+                                        </button>
+                                    </div>
                             
-                                    {displayExpenses.length > 0 ? (
+                                    {expenseViewMode === 'individual' ? (
+                                        /* Individual View */
+                                        displayExpenses.length > 0 ? (
                                 <div className="expenses-list">
                                             {displayExpenses
                                         .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -1539,7 +1600,152 @@ function EventPage() {
                                         Add First Expense
                                     </button>
                                 </div>
-                            )}
+                            )
+                                    ) : (
+                                        /* Grouped View */
+                                        groupedExpenses.length > 0 ? (
+                                            <div className="expenses-list grouped-expenses-list">
+                                                {groupedExpenses.map((group, index) => {
+                                                    const isExpanded = expandedGroups[group.key];
+                                                    const allSettled = group.splits.every(s => s.status);
+                                                    const settledCount = group.splits.filter(s => s.status).length;
+                                                    const gradientColors = [
+                                                        ['#667eea', '#764ba2'],
+                                                        ['#f093fb', '#f5576c'],
+                                                        ['#4facfe', '#00f2fe'],
+                                                        ['#43e97b', '#38f9d7'],
+                                                        ['#fa709a', '#fee140'],
+                                                        ['#a18cd1', '#fbc2eb'],
+                                                        ['#fccb90', '#d57eeb'],
+                                                        ['#e0c3fc', '#8ec5fc']
+                                                    ];
+                                                    const gradient = gradientColors[index % gradientColors.length];
+                                                    return (
+                                                        <div 
+                                                            key={group.key} 
+                                                            className={`grouped-expense-card ${isExpanded ? 'expanded' : ''}`}
+                                                            style={{ 
+                                                                animationDelay: `${index * 0.08}s`,
+                                                                '--card-gradient-start': gradient[0],
+                                                                '--card-gradient-end': gradient[1]
+                                                            }}
+                                                        >
+                                                            <div className="grouped-card-accent" style={{ background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})` }}></div>
+                                                            <div className="grouped-expense-header" onClick={() => toggleGroupExpand(group.key)}>
+                                                                <div className="grouped-payer-info">
+                                                                    <div className="grouped-avatar-ring" style={{ background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})` }}>
+                                                                        <img
+                                                                            src={group.paidBy?.profilePic || `https://ui-avatars.com/api/?name=${group.paidBy?.username}&background=667eea&color=fff&size=48`}
+                                                                            alt={group.paidBy?.username}
+                                                                            className="grouped-payer-avatar"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="grouped-payer-details">
+                                                                        <div className="grouped-payer-name">{group.paidBy?.username} <span className="grouped-paid-label">paid</span></div>
+                                                                        <div className="grouped-payer-desc">
+                                                                            <i className="fas fa-tag"></i>
+                                                                            {group.description}
+                                                                        </div>
+                                                                        <div className="grouped-expense-date">
+                                                                            <i className="fas fa-calendar-alt"></i>
+                                                                            {new Date(group.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grouped-expense-right">
+                                                                    <div className="grouped-expense-amount" style={{ color: gradient[0] }}>₹{group.totalAmount.toFixed(2)}</div>
+                                                                    <div className="grouped-expense-meta">
+                                                                        <span className="grouped-split-count">
+                                                                            <div className="mini-avatar-stack">
+                                                                                {group.splits.slice(0, 3).map((s, i) => (
+                                                                                    <img 
+                                                                                        key={i} 
+                                                                                        src={s.paidTo?.profilePic || `https://ui-avatars.com/api/?name=${s.paidTo?.username}&background=764ba2&color=fff&size=24`}
+                                                                                        alt="" 
+                                                                                        className="mini-stack-avatar"
+                                                                                        style={{ zIndex: 3 - i }}
+                                                                                    />
+                                                                                ))}
+                                                                                {group.splits.length > 3 && <span className="mini-stack-more">+{group.splits.length - 3}</span>}
+                                                                            </div>
+                                                                            <span>{group.splits.length} {group.splits.length === 1 ? 'person' : 'people'}</span>
+                                                                        </span>
+                                                                        <span className={`grouped-status-badge ${allSettled ? 'settled' : 'pending'}`}>
+                                                                            <i className={`fas ${allSettled ? 'fa-check-circle' : 'fa-hourglass-half'}`}></i>
+                                                                            {allSettled ? 'Settled' : `${settledCount}/${group.splits.length}`}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className={`expand-indicator ${isExpanded ? 'open' : ''}`}>
+                                                                        <span>{isExpanded ? 'Hide' : 'Details'}</span>
+                                                                        <i className={`fas fa-chevron-down chevron-icon ${isExpanded ? 'rotated' : ''}`}></i>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className={`grouped-expense-splits ${isExpanded ? 'open' : ''}`}>
+                                                                <div className="splits-inner">
+                                                                    <div className="splits-header">
+                                                                        <span><i className="fas fa-project-diagram"></i> Split Breakdown</span>
+                                                                        <span className="splits-total">Total: ₹{group.totalAmount.toFixed(2)}</span>
+                                                                    </div>
+                                                                    {group.splits.map((split, sIdx) => (
+                                                                        <div 
+                                                                            key={split._id || sIdx} 
+                                                                            className="split-row"
+                                                                            style={{ animationDelay: `${sIdx * 0.06}s` }}
+                                                                        >
+                                                                            <div className="split-user">
+                                                                                <div className="split-avatar-wrapper">
+                                                                                    <img
+                                                                                        src={split.paidTo?.profilePic || `https://ui-avatars.com/api/?name=${split.paidTo?.username}&background=764ba2&color=fff&size=36`}
+                                                                                        alt={split.paidTo?.username}
+                                                                                        className="split-avatar"
+                                                                                    />
+                                                                                    <div className={`split-status-dot ${split.status ? 'settled' : 'pending'}`}></div>
+                                                                                </div>
+                                                                                <div className="split-user-info">
+                                                                                    <span className="split-username">{split.paidTo?.username}</span>
+                                                                                    <span className={`split-status-text ${split.status ? 'settled' : 'pending'}`}>
+                                                                                        {split.status ? 'Settled' : 'Pending'}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="split-right">
+                                                                                <span className="split-amount">₹{split.amount?.toFixed(2)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="empty-expenses">
+                                                <div className="empty-icon">
+                                                    <i className="fas fa-receipt"></i>
+                                                </div>
+                                                <h4>No expenses found</h4>
+                                                <p>
+                                                    {searchTerm || selectedCategory !== 'all'
+                                                        ? 'Try adjusting your search or filter criteria'
+                                                        : 'Start by adding your first expense to track shared costs'
+                                                    }
+                                                </p>
+                                                <button
+                                                    className="btn-empty-action"
+                                                    onClick={() => {
+                                                        setShowAddExpense(true);
+                                                        setSearchTerm('');
+                                                        setSelectedCategory('all');
+                                                    }}
+                                                >
+                                                    <i className="fas fa-plus"></i>
+                                                    Add First Expense
+                                                </button>
+                                            </div>
+                                        )
+                                    )}
                         </div>
                             )}
 
