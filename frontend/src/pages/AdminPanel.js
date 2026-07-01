@@ -8,6 +8,8 @@ function AdminPanel() {
     const [users, setUsers] = useState([]);
     const [events, setEvents] = useState([]);
     const [expenses, setExpenses] = useState([]);
+    const [deletedExpenses, setDeletedExpenses] = useState([]);
+    const [showRecycleBin, setShowRecycleBin] = useState(false);
     const [alerts, setAlerts] = useState([]);
     const [polls, setPolls] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -375,6 +377,57 @@ function AdminPanel() {
         }
     }, [error, success]);
 
+    const fetchDeletedExpenses = async () => {
+        setLoading(true);
+        try {
+            const adminUsername = localStorage.getItem('username');
+            const headers = { 'adminusername': adminUsername };
+            const response = await fetch(`${API_BASE}/api/admin/expenses/deleted`, { headers });
+            if (!response.ok) throw new Error('Failed to fetch deleted expenses');
+            const data = await response.json();
+            setDeletedExpenses(data);
+        } catch (err) {
+            setError(err.message || 'Failed to fetch deleted expenses');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRestoreExpense = async (id) => {
+        if (!window.confirm('Are you sure you want to restore this expense?')) return;
+        setDeletedExpenses(prev => prev.filter(item => item._id !== id));
+        try {
+            const adminUsername = localStorage.getItem('username');
+            const response = await fetch(`${API_BASE}/api/admin/expenses/deleted/${id}/restore`, {
+                method: 'PUT',
+                headers: { 'adminusername': adminUsername }
+            });
+            if (!response.ok) throw new Error('Failed to restore expense');
+            setSuccess('Expense restored successfully');
+            fetchAllData(); // Refresh main list
+        } catch (err) {
+            setError(err.message || 'Failed to restore expense');
+            fetchDeletedExpenses(); // Revert
+        }
+    };
+
+    const handlePermanentDeleteExpense = async (id) => {
+        if (!window.confirm('Are you sure you want to PERMANENTLY delete this expense? This cannot be undone.')) return;
+        setDeletedExpenses(prev => prev.filter(item => item._id !== id));
+        try {
+            const adminUsername = localStorage.getItem('username');
+            const response = await fetch(`${API_BASE}/api/admin/expenses/deleted/${id}/permanent`, {
+                method: 'DELETE',
+                headers: { 'adminusername': adminUsername }
+            });
+            if (!response.ok) throw new Error('Failed to permanently delete expense');
+            setSuccess('Expense permanently deleted');
+        } catch (err) {
+            setError(err.message || 'Failed to permanently delete expense');
+            fetchDeletedExpenses(); // Revert
+        }
+    };
+
     const filteredExpenses = expenses.filter(expense => {
         if (!expenseSearchTerm) return true;
         const term = expenseSearchTerm.toLowerCase();
@@ -605,63 +658,138 @@ function AdminPanel() {
                 {activeTab === 'expenses' && (
                     <div className="tab-content">
                         <div className="content-header">
-                            <h2>Expense Management</h2>
-                            <div className="admin-search-bar">
-                                <i className="fas fa-search"></i>
-                                <input
-                                    type="text"
-                                    placeholder="Search expenses..."
-                                    value={expenseSearchTerm}
-                                    onChange={(e) => setExpenseSearchTerm(e.target.value)}
-                                />
+                            <h2>{showRecycleBin ? 'Recycle Bin' : 'Expense Management'}</h2>
+                            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                                {!showRecycleBin && (
+                                    <div className="admin-search-bar">
+                                        <i className="fas fa-search"></i>
+                                        <input
+                                            type="text"
+                                            placeholder="Search expenses..."
+                                            value={expenseSearchTerm}
+                                            onChange={(e) => setExpenseSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                                <button
+                                    className={`btn-${showRecycleBin ? 'secondary' : 'warning'}`}
+                                    onClick={() => {
+                                        if (!showRecycleBin) fetchDeletedExpenses();
+                                        setShowRecycleBin(!showRecycleBin);
+                                    }}
+                                >
+                                    <i className={`fas fa-${showRecycleBin ? 'arrow-left' : 'trash-restore'}`}></i> 
+                                    {showRecycleBin ? ' Back to Expenses' : ' Recycle Bin'}
+                                </button>
                             </div>
                         </div>
 
-                        <div className="data-table">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Paid By</th>
-                                        <th>Paid To</th>
-                                        <th>Amount</th>
-                                        <th>Description</th>
-                                        <th>Status</th>
-                                        <th>Date</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredExpenses.map(expense => (
-                                        <tr key={expense._id}>
-                                            <td data-label="Paid By">{expense.paidBy?.username || 'N/A'}</td>
-                                            <td data-label="Paid To">{expense.paidTo?.username || 'N/A'}</td>
-                                            <td data-label="Amount">₹{expense.amount?.toFixed(2)}</td>
-                                            <td data-label="Description">{expense.description || 'N/A'}</td>
-                                            <td data-label="Status">
-                                                <span className={`badge ${expense.status ? 'settled' : 'pending'}`}>
-                                                    {expense.status ? 'Settled' : 'Pending'}
-                                                </span>
-                                            </td>
-                                            <td data-label="Date">{new Date(expense.date).toLocaleDateString()}</td>
-                                            <td data-label="Actions">
-                                                <button 
-                                                    className="btn-edit"
-                                                    onClick={() => handleEdit('expense', expense)}
-                                                >
-                                                    <i className="fas fa-edit"></i>
-                                                </button>
-                                                <button 
-                                                    className="btn-delete"
-                                                    onClick={() => handleDelete('expenses', expense._id)}
-                                                >
-                                                    <i className="fas fa-trash"></i>
-                                                </button>
-                                            </td>
+                        {!showRecycleBin ? (
+                            <div className="data-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Paid By</th>
+                                            <th>Paid To</th>
+                                            <th>Amount</th>
+                                            <th>Description</th>
+                                            <th>Status</th>
+                                            <th>Date</th>
+                                            <th>Actions</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        {filteredExpenses.map(expense => (
+                                            <tr key={expense._id}>
+                                                <td data-label="Paid By">{expense.paidBy?.username || 'N/A'}</td>
+                                                <td data-label="Paid To">{expense.paidTo?.username || 'N/A'}</td>
+                                                <td data-label="Amount">₹{expense.amount?.toFixed(2)}</td>
+                                                <td data-label="Description">{expense.description || 'N/A'}</td>
+                                                <td data-label="Status">
+                                                    <span className={`badge ${expense.status ? 'settled' : 'pending'}`}>
+                                                        {expense.status ? 'Settled' : 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td data-label="Date">{new Date(expense.date).toLocaleDateString()}</td>
+                                                <td data-label="Actions">
+                                                    <button 
+                                                        className="btn-edit"
+                                                        onClick={() => handleEdit('expense', expense)}
+                                                    >
+                                                        <i className="fas fa-edit"></i>
+                                                    </button>
+                                                    <button 
+                                                        className="btn-delete"
+                                                        onClick={() => handleDelete('expenses', expense._id)}
+                                                    >
+                                                        <i className="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="data-table recycle-bin-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Paid By</th>
+                                            <th>Paid To</th>
+                                            <th>Amount</th>
+                                            <th>Description</th>
+                                            <th>Deleted On</th>
+                                            <th>Time Left</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {deletedExpenses.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="7" style={{ textAlign: 'center', padding: '30px' }}>
+                                                    Recycle Bin is empty
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            deletedExpenses.map(expense => {
+                                                const deletedAt = new Date(expense.deletedAt);
+                                                const expiryDate = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+                                                const daysLeft = Math.max(0, Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24)));
+                                                return (
+                                                    <tr key={expense._id}>
+                                                        <td data-label="Paid By">{expense.paidBy?.username || 'N/A'}</td>
+                                                        <td data-label="Paid To">{expense.paidTo?.username || 'N/A'}</td>
+                                                        <td data-label="Amount">₹{expense.amount?.toFixed(2)}</td>
+                                                        <td data-label="Description">{expense.description || 'N/A'}</td>
+                                                        <td data-label="Deleted On">{deletedAt.toLocaleDateString()}</td>
+                                                        <td data-label="Time Left">
+                                                            <span className="badge warning">{daysLeft} days</span>
+                                                        </td>
+                                                        <td data-label="Actions">
+                                                            <button 
+                                                                className="btn-restore"
+                                                                onClick={() => handleRestoreExpense(expense._id)}
+                                                                title="Restore"
+                                                            >
+                                                                <i className="fas fa-undo"></i>
+                                                            </button>
+                                                            <button 
+                                                                className="btn-permanent-delete"
+                                                                onClick={() => handlePermanentDeleteExpense(expense._id)}
+                                                                title="Delete Permanently"
+                                                            >
+                                                                <i className="fas fa-times"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 )}
 

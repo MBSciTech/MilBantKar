@@ -214,6 +214,61 @@
     transform: translateY(-1px);
 }
 
+.btn-warning {
+    background: #f6ad55;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-warning:hover {
+    background: #dd6b20;
+    transform: translateY(-1px);
+}
+
+.btn-restore {
+    background: #48bb78;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-right: 5px;
+}
+
+.btn-restore:hover {
+    background: #38a169;
+    transform: translateY(-1px);
+}
+
+.btn-permanent-delete {
+    background: #e53e3e;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-permanent-delete:hover {
+    background: #c53030;
+    transform: translateY(-1px);
+}
+
+.recycle-bin-table th {
+    background: linear-gradient(135deg, #fff5f5, #ffffff);
+    color: #c53030;
+}
+
 .data-table {
     overflow-x: auto;
     border-radius: 15px;

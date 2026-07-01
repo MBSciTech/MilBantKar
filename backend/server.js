@@ -1459,6 +1459,54 @@ app.delete('/api/admin/expenses/:id', isAdmin, async (req, res) => {
     }
 });
 
+// Admin: Get all deleted expenses (Recycle Bin)
+app.get('/api/admin/expenses/deleted', isAdmin, async (req, res) => {
+    try {
+        const deletedExpenses = await ExpenseLog.find({ deletedAt: { $ne: null } })
+            .populate("paidBy", "username")
+            .populate("paidTo", "username")
+            .sort({ deletedAt: -1 });
+        res.status(200).json(deletedExpenses);
+    } catch (error) {
+        console.error("❌ Error fetching deleted expenses:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Restore a deleted expense
+app.put('/api/admin/expenses/deleted/:id/restore', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const restoredExpense = await ExpenseLog.findByIdAndUpdate(id, { deletedAt: null }, { new: true });
+        if (!restoredExpense) {
+            return res.status(404).json({ message: "Expense not found" });
+        }
+        
+        res.status(200).json({ message: "Expense restored successfully", expense: restoredExpense });
+    } catch (error) {
+        console.error("❌ Error restoring expense:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+// Admin: Permanently delete an expense
+app.delete('/api/admin/expenses/deleted/:id/permanent', isAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const deletedExpense = await ExpenseLog.findByIdAndDelete(id);
+        if (!deletedExpense) {
+            return res.status(404).json({ message: "Expense not found" });
+        }
+        
+        res.status(200).json({ message: "Expense permanently deleted" });
+    } catch (error) {
+        console.error("❌ Error permanently deleting expense:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
 // Admin: Delete alert
 app.delete('/api/admin/alerts/:id', isAdmin, async (req, res) => {
     try {
