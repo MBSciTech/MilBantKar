@@ -300,6 +300,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // MongoDB connection (MilBantKar database)
 const MONGO_URI = process.env.MONGO_URI;
 
+if (!MONGO_URI) {
+    console.error("❌ ERROR: MONGO_URI environment variable is not defined!");
+    console.error("If you are deploying on Render, make sure to add MONGO_URI in your Environment Variables settings.");
+    process.exit(1);
+}
+
 mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
