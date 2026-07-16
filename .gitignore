@@ -1,0 +1,13 @@
+# Custom Flutter build output folder
+b/
+
+# Node backend
+backend/node_modules/
+
+# Environment (secrets / API URLs)
+.env
+mobile/.env
+
+# OS files
+.DS_Store
+Thumbs.db
