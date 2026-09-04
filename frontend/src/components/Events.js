@@ -18,7 +18,7 @@ const API_BASE = "https://milbantkar-1.onrender.com";
 
 function Events({ user }) {
   const [events, setEvents] = useState([]);
-  const [newEvent, setNewEvent] = useState({ name: "", description: "" });
+  const [newEvent, setNewEvent] = useState({ name: "", description: "", type: "friendly" });
   const [joinCode, setJoinCode] = useState("");
   const [activeTab, setActiveTab] = useState("create");
   const [loading, setLoading] = useState(false);
@@ -83,7 +83,7 @@ function Events({ user }) {
       const res = await response.json();
       const newEventData = res.event || res;
       setEvents(prevEvents => [newEventData, ...prevEvents]);
-      setNewEvent({ name: "", description: "" });
+      setNewEvent({ name: "", description: "", type: "friendly" });
       
       showNotification("Event created successfully! 🎉", "success");
     } catch (err) {
@@ -625,6 +625,18 @@ function Events({ user }) {
                         rows={3}
                         maxLength={200}
                       />
+                    </div>
+
+                    <div className="col-12">
+                      <select
+                        value={newEvent.type}
+                        onChange={(e) => setNewEvent({ ...newEvent, type: e.target.value })}
+                        className="form-control form-glass"
+                        style={{ appearance: 'auto' }}
+                      >
+                        <option value="friendly" style={{color: 'black'}}>Friendly (Standard Expense Split)</option>
+                        <option value="ipo" style={{color: 'black'}}>IPO (Funding Tracker)</option>
+                      </select>
                     </div>
                     
                     <div className="col-12">

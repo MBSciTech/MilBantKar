@@ -9,6 +9,30 @@ const ExpenseLog = require('./models/expenceLog');
 const expenceLog = require('./models/expenceLog');
 const Event = require('./models/Event');
 const Alert = require('./models/Alert');
+const IPOApplication = require('./models/IPOApplication');
+const FundingRecord = require('./models/FundingRecord');
+const { verifyAmountOCR } = require('./utils/ocrService');
+const path = require('path');
+const cron = require('node-cron');
+const ocrFailureCounts = new Map();
+const multer = require('multer');
+const fs = require('fs');
+
+// Ensure uploads directory exists
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/')
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname)
+  }
+});
+const upload = multer({ storage: storage });
 
 require('dotenv').config();
 
@@ -220,6 +244,48 @@ const io = new Server(httpServer, {
         methods: ['GET', 'POST', 'PUT', 'DELETE']
     }
 });
+
+// --- Stale IPO Alerts Scheduled Job ---
+// Check every day at midnight
+cron.schedule('0 0 * * *', async () => {
+    try {
+        const Alert = require('./models/Alert');
+        const FundingRecord = require('./models/FundingRecord');
+        const fiveDaysAgo = new Date();
+        fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+
+        // Find stale records (Funded > 5 days ago but not allotted, or fully_allotted > 5 days ago but not settled, etc.)
+        // Simplification for this feature: any record created more than 5 days ago that hasn't reached 'Settled' or 'Closed'
+        const staleRecords = await FundingRecord.find({
+            createdAt: { $lt: fiveDaysAgo },
+            overallStatus: { $nin: ['Settled', 'Closed'] }
+        }).populate('financierId applicantId');
+
+        for (const record of staleRecords) {
+            // Check if alert already exists recently
+            const existingAlert = await Alert.findOne({
+                eventId: record.ipoApplicationId, // using application id context
+                type: 'stale-ipo-alert',
+                receiver: record.financierId._id,
+                createdAt: { $gt: fiveDaysAgo }
+            });
+
+            if (!existingAlert) {
+                await Alert.create({
+                    receiver: record.financierId._id,
+                    type: 'stale-ipo-alert',
+                    title: `Stale IPO Funding Record`,
+                    message: `Funding for applicant ${record.applicantId.username} is pending for over 5 days. Current Status: ${record.overallStatus}`,
+                    eventId: record.ipoApplicationId,
+                    isRead: false
+                });
+            }
+        }
+    } catch (err) {
+        console.error('Error running stale IPO check:', err);
+    }
+});
+
 const PORT = process.env.PORT || 5000;
 
 const isWebPushConfigured = Boolean(
@@ -1661,6 +1727,296 @@ app.post('/api/unsubscribe', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+// --- IPO Routes ---
+
+app.post('/api/upload', upload.single('screenshot'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+    }
+    // Return relative path for saving in DB
+    res.status(200).json({ path: req.file.path });
+});
+
+app.get('/api/events/:eventId/ipo-applications', async (req, res) => {
+    try {
+        const applications = await IPOApplication.find({ eventId: req.params.eventId }).populate('createdBy', 'username');
+        res.status(200).json(applications);
+    } catch (error) {
+        console.error('Error fetching IPO applications:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.post('/api/events/:eventId/ipo-applications', async (req, res) => {
+    try {
+        const { companyName, applicationDate, notes, createdBy } = req.body;
+        const newApp = new IPOApplication({
+            eventId: req.params.eventId,
+            companyName,
+            applicationDate,
+            notes,
+            createdBy
+        });
+        await newApp.save();
+        res.status(201).json(newApp);
+    } catch (error) {
+        console.error('Error creating IPO application:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.get('/api/funding-records', async (req, res) => {
+    try {
+        const { userId, role, status } = req.query;
+        let filter = {};
+        if (userId) {
+            if (role === 'financier') filter.financierId = userId;
+            else if (role === 'applicant') filter.applicantId = userId;
+            else filter.$or = [{ financierId: userId }, { applicantId: userId }];
+        }
+        if (status) {
+            if (Array.isArray(status)) filter.overallStatus = { $in: status };
+            else filter.overallStatus = status;
+        }
+
+        const records = await FundingRecord.find(filter)
+            .populate('financierId', 'username')
+            .populate('applicantId', 'username')
+            .populate('ipoApplicationId');
+        res.status(200).json(records);
+    } catch (error) {
+        console.error('Error fetching funding records:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.post('/api/ipo-applications/:id/funding-records', async (req, res) => {
+    try {
+        const { financierId, applicants } = req.body;
+        const ipoApplicationId = req.params.id;
+
+        const uploaderId = req.headers['x-user-id'] || financierId;
+
+        const createdRecords = [];
+        for (const appData of applicants) {
+            if (appData.fundingProofScreenshot) {
+                const failKey = `${uploaderId}_${ipoApplicationId}_${appData.applicantId}`;
+                const fails = ocrFailureCounts.get(failKey) || 0;
+
+                if (appData.requestOverride) {
+                    if (fails < 2) {
+                        return res.status(400).json({ message: 'Override not permitted until 2 failed attempts.' });
+                    }
+                    ocrFailureCounts.delete(failKey);
+
+                    const receiverId = (uploaderId === financierId) ? appData.applicantId : financierId;
+                    const alert = new Alert({
+                        sender: uploaderId,
+                        receiver: receiverId,
+                        message: `Manually confirmed a funding payment of ₹${appData.amountFunded} that couldn't be auto-verified for an IPO.`,
+                        type: 'notification'
+                    });
+                    await alert.save();
+                } else {
+                   const imgPath = path.join(__dirname, appData.fundingProofScreenshot);
+                   const ocrRes = await verifyAmountOCR(imgPath, appData.amountFunded);
+                   if (!ocrRes.success) {
+                       const newFails = fails + 1;
+                       ocrFailureCounts.set(failKey, newFails);
+                       return res.status(400).json({ 
+                           message: `OCR verification failed for applicant ${appData.applicantId}. Detected amounts: ${ocrRes.foundAmounts.join(', ')}.`,
+                           canOverride: newFails >= 2,
+                           applicantId: appData.applicantId
+                       });
+                   } else {
+                       ocrFailureCounts.delete(failKey);
+                   }
+                }
+            } else {
+                 return res.status(400).json({ message: 'fundingProofScreenshot is required' });
+            }
+
+            const record = new FundingRecord({
+                ipoApplicationId,
+                financierId,
+                applicantId: appData.applicantId,
+                amountFunded: appData.amountFunded,
+                fundingProofScreenshot: appData.fundingProofScreenshot
+            });
+            await record.save();
+            createdRecords.push(record);
+        }
+
+        res.status(201).json(createdRecords);
+    } catch (error) {
+        console.error('Error creating funding records:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.patch('/api/funding-records/:id/allotment', async (req, res) => {
+    try {
+        const { allotmentStatus, allotedAmount } = req.body;
+        const record = await FundingRecord.findById(req.params.id);
+        if (!record) return res.status(404).json({ message: 'Not found' });
+
+        record.allotmentStatus = allotmentStatus;
+        record.allotedAmount = allotedAmount || 0;
+        record.refundAmount = record.amountFunded - record.allotedAmount;
+        
+        if (['not_allotted', 'partially_allotted'].includes(allotmentStatus)) {
+            record.refundStatus = 'pending';
+        }
+        if (['fully_allotted', 'partially_allotted'].includes(allotmentStatus)) {
+            record.holdingStatus = 'holding';
+        }
+        
+        record.overallStatus = 'Result declared';
+        
+        await record.save();
+        res.status(200).json(record);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.patch('/api/funding-records/:id/refund', async (req, res) => {
+    try {
+        const record = await FundingRecord.findById(req.params.id);
+        if (!record) return res.status(404).json({ message: 'Not found' });
+
+        const uploaderId = req.headers['x-user-id'] || String(record.applicantId);
+        const { refundProofScreenshot, requestOverride } = req.body;
+        if (!refundProofScreenshot) return res.status(400).json({ message: 'Screenshot required' });
+        
+        const failKey = `${req.params.id}_refund`;
+        const fails = ocrFailureCounts.get(failKey) || 0;
+
+        if (requestOverride) {
+            if (fails < 2) {
+                return res.status(400).json({ message: 'Override not permitted until 2 failed attempts.' });
+            }
+            ocrFailureCounts.delete(failKey);
+
+            const receiverId = (uploaderId === String(record.financierId)) ? record.applicantId : record.financierId;
+            const alert = new Alert({
+                sender: uploaderId,
+                receiver: receiverId,
+                message: `Manually confirmed a refund payment of ₹${record.refundAmount} that couldn't be auto-verified.`,
+                type: 'notification'
+            });
+            await alert.save();
+        } else {
+           const imgPath = path.join(__dirname, refundProofScreenshot);
+           const ocrRes = await verifyAmountOCR(imgPath, record.refundAmount);
+           if (!ocrRes.success) {
+               const newFails = fails + 1;
+               ocrFailureCounts.set(failKey, newFails);
+               return res.status(400).json({ 
+                   message: `OCR verification failed. Detected amounts: ${ocrRes.foundAmounts.join(', ')}.`,
+                   canOverride: newFails >= 2
+               });
+           } else {
+               ocrFailureCounts.delete(failKey);
+           }
+        }
+
+        record.refundProofScreenshot = refundProofScreenshot;
+        record.refundStatus = 'settled';
+        record.refundSettledDate = new Date();
+        
+        if (record.holdingStatus === 'not_applicable' || record.settlementStatus === 'settled') {
+            record.overallStatus = 'Closed';
+        } else {
+            record.overallStatus = 'Refund Settled / Holding';
+        }
+
+        await record.save();
+        res.status(200).json(record);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.patch('/api/funding-records/:id/sale', async (req, res) => {
+    try {
+        const { saleProceeds, saleDate } = req.body;
+        const record = await FundingRecord.findById(req.params.id);
+        if (!record) return res.status(404).json({ message: 'Not found' });
+
+        record.saleProceeds = saleProceeds;
+        record.saleDate = saleDate || new Date();
+        record.holdingStatus = 'sold';
+        record.settlementStatus = 'pending';
+        record.overallStatus = 'Sold - Settlement Pending';
+        
+        await record.save();
+        res.status(200).json(record);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.patch('/api/funding-records/:id/settle', async (req, res) => {
+    try {
+        const record = await FundingRecord.findById(req.params.id);
+        if (!record) return res.status(404).json({ message: 'Not found' });
+
+        const uploaderId = req.headers['x-user-id'] || String(record.financierId);
+        const { settlementProofScreenshot, requestOverride } = req.body;
+        if (!settlementProofScreenshot) return res.status(400).json({ message: 'Screenshot required' });
+        
+        const failKey = `${req.params.id}_settle`;
+        const fails = ocrFailureCounts.get(failKey) || 0;
+
+        if (requestOverride) {
+            if (fails < 2) {
+                return res.status(400).json({ message: 'Override not permitted until 2 failed attempts.' });
+            }
+            ocrFailureCounts.delete(failKey);
+
+            const receiverId = (uploaderId === String(record.applicantId)) ? record.financierId : record.applicantId;
+            const alert = new Alert({
+                sender: uploaderId,
+                receiver: receiverId,
+                message: `Manually confirmed a settlement payment of ₹${record.saleProceeds} that couldn't be auto-verified.`,
+                type: 'notification'
+            });
+            await alert.save();
+        } else {
+           const imgPath = path.join(__dirname, settlementProofScreenshot);
+           const ocrRes = await verifyAmountOCR(imgPath, record.saleProceeds);
+           if (!ocrRes.success) {
+               const newFails = fails + 1;
+               ocrFailureCounts.set(failKey, newFails);
+               return res.status(400).json({ 
+                   message: `OCR verification failed. Detected amounts: ${ocrRes.foundAmounts.join(', ')}.`,
+                   canOverride: newFails >= 2
+               });
+           } else {
+               ocrFailureCounts.delete(failKey);
+           }
+        }
+
+        record.settlementProofScreenshot = settlementProofScreenshot;
+        record.settlementStatus = 'settled';
+        record.settledDate = new Date();
+        
+        if (record.refundStatus === 'not_applicable' || record.refundStatus === 'settled') {
+            record.overallStatus = 'Closed';
+        } else {
+            record.overallStatus = 'Settled / Refund Pending';
+        }
+
+        await record.save();
+        res.status(200).json(record);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// --- End IPO Routes ---
 
 // Start server
 httpServer.listen(PORT, '0.0.0.0', () => {

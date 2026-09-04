@@ -7,6 +7,11 @@ const eventSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    type: {
+      type: String,
+      enum: ['friendly', 'ipo'],
+      default: 'friendly'
+    },
     description: {
       type: String,
       default: ''

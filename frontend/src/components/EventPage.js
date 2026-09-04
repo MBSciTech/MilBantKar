@@ -5,6 +5,7 @@ import './EventPage.css';
 // Import QRCode component
 import QRCode from 'react-qr-code';
 import { io } from 'socket.io-client';
+import IPOApplicationPage from './IPOApplicationPage';
 
 const API_BASE = process.env.REACT_APP_API_BASE_URL || 'https://milbantkar-1.onrender.com';
 const API_FALLBACK = 'http://localhost:5000';
@@ -821,6 +822,10 @@ function EventPage() {
     };
 
     const groupedExpenses = groupExpenses(displayExpenses);
+
+    if (event.type === 'ipo') {
+        return <IPOApplicationPage event={event} fetchEventDetails={fetchEventDetails} />;
+    }
 
     return (
         <div className="event-page">

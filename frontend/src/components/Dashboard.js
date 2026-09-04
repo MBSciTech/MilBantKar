@@ -4,6 +4,7 @@ import { TrendingUp, TrendingDown, Users, Activity, CheckCircle, Clock, Target, 
 
 function Dashboard() {
   const [filteredExpenses, setFilteredExpenses] = useState([]);
+  const [pendingIPOs, setPendingIPOs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState('');
 
@@ -30,6 +31,19 @@ function Dashboard() {
       );
       
       setFilteredExpenses(userExpenses);
+
+      // Fetch IPOs
+      try {
+        const ipoRes = await fetch("https://milbantkar-1.onrender.com/api/funding-records");
+        const ipoData = await ipoRes.json();
+        const userIPOs = ipoData.filter(r => 
+          (r.financierId?.username === username || r.applicantId?.username === username) &&
+          (r.refundStatus === 'pending' || r.settlementStatus === 'pending' || r.overallStatus === 'Funded' || r.overallStatus === 'Result declared' || r.overallStatus === 'Sold - Settlement Pending') 
+        );
+        setPendingIPOs(userIPOs);
+      } catch (e) {
+        console.error("IPO fetch error:", e);
+      }
 
     } catch (error) {
       console.error("❌ Error fetching data:", error);
@@ -551,6 +565,36 @@ function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Pending IPO Settlements */}
+            <div className="card bg-dark border-warning mt-4">
+              <div className="card-header bg-warning text-dark">
+                <h6 className="mb-0">Pending IPO Settlements</h6>
+              </div>
+              <div className="card-body p-0">
+                {pendingIPOs.length === 0 ? (
+                  <div className="p-3 text-white">No pending IPO settlements</div>
+                ) : (
+                  <div className="list-group list-group-flush">
+                    {pendingIPOs.map(ipo => (
+                      <div key={ipo._id} className="list-group-item bg-dark border-secondary">
+                        <div className="d-flex justify-content-between align-items-center">
+                          <strong className="text-white">
+                            {ipo.financierId?.username} → {ipo.applicantId?.username}
+                          </strong>
+                          <span className="text-primary fw-bold">₹{ipo.amountFunded}</span>
+                        </div>
+                        <div className="small text-muted d-flex gap-2 flex-wrap mt-1">
+                          {ipo.refundStatus === 'pending' && <span className="badge bg-warning text-dark">Refund Pending (₹{ipo.refundAmount})</span>}
+                          {ipo.settlementStatus === 'pending' && <span className="badge bg-danger">Settlement Pending (₹{ipo.saleProceeds})</span>}
+                          {(ipo.refundStatus !== 'pending' && ipo.settlementStatus !== 'pending') && <span className="badge bg-info text-dark">{ipo.overallStatus}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

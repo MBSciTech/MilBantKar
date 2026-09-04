@@ -7,6 +7,9 @@ const API_FALLBACK = "http://localhost:5000";
 function History() {
   const [expenses, setExpenses] = useState([]);
   const [filteredExpenses, setFilteredExpenses] = useState([]);
+  const [ipoRecords, setIpoRecords] = useState([]);
+  const [filteredIpos, setFilteredIpos] = useState([]);
+  const [activeTab, setActiveTab] = useState("friendly");
   const [user, setUser] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("date");
@@ -145,6 +148,15 @@ function History() {
 
           setExpenses(filtered);
           setFilteredExpenses(filtered);
+
+          try {
+            const iposResponse = await fetchJsonWithFallback('/api/funding-records');
+            const userIpos = iposResponse.filter(
+              (r) => getUserRefName(r.financierId) === username || getUserRefName(r.applicantId) === username
+            );
+            setIpoRecords(userIpos);
+            setFilteredIpos(userIpos);
+          } catch(e) { console.error('IPO err', e); }
         } catch (err) {
           console.error("Error fetching expenses:", err);
         } finally {
@@ -243,7 +255,19 @@ function History() {
     });
 
     setFilteredExpenses(filtered);
-  }, [expenses, searchTerm, sortBy, sortOrder, statusFilter]);
+
+    // Filter IPOs
+    let fIpos = [...ipoRecords];
+    if (statusFilter !== "all") {
+      if (statusFilter === "settled") {
+        fIpos = fIpos.filter(r => r.overallStatus === 'Closed' || (r.refundStatus === 'settled' && r.settlementStatus === 'settled'));
+      } else if (statusFilter === "pending") {
+        fIpos = fIpos.filter(r => r.refundStatus === 'pending' || r.settlementStatus === 'pending' || (r.overallStatus !== 'Closed' && r.overallStatus !== 'Settled' && r.overallStatus !== 'Settled / Refund Pending'));
+      }
+    }
+    setFilteredIpos(fIpos);
+
+  }, [expenses, ipoRecords, searchTerm, sortBy, sortOrder, statusFilter]);
 
   const getSettlementState = (expense) => {
     const paidByConfirmed = Boolean(expense?.settlementConfirmation?.paidByConfirmed || expense?.status);
@@ -957,6 +981,12 @@ function History() {
             </div>
           </div>
 
+          {/* Tabs */}
+          <div className="d-flex mb-4 slide-in-up">
+            <button className={`btn btn-lg me-2 ${activeTab === 'friendly' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setActiveTab('friendly')}>Friendly Expenses</button>
+            <button className={`btn btn-lg ${activeTab === 'ipo' ? 'btn-primary' : 'btn-outline-primary'}`} onClick={() => setActiveTab('ipo')}>IPO Ledger</button>
+          </div>
+
           {/* Search and Filters */}
           <div className="glass-card p-4 mb-5 slide-in-right">
             {statusMessage && (
@@ -1060,6 +1090,8 @@ function History() {
           </div>
 
           {/* Desktop Table View */}
+          {activeTab === 'friendly' ? (
+          <>
           <div className="card glass-card d-none d-lg-block mb-5 slide-in-left">
             <div className="card-body p-0">
               <div className="table-responsive">
@@ -1356,6 +1388,34 @@ function History() {
               </div>
             )}
           </div>
+          </>
+          ) : (
+          <div className="card glass-card mb-5 slide-in-left">
+            <div className="card-body p-4">
+              <h5 className="mb-4 text-dark fw-bold">IPO Ledger</h5>
+              {filteredIpos.length === 0 ? (
+                <div className="text-center py-5">
+                   <p className="text-muted">No IPO records found.</p>
+                </div>
+              ) : (
+                filteredIpos.map(ipo => (
+                  <div key={ipo._id} className="border-bottom p-3 mb-3 bg-light rounded text-dark d-flex flex-column gap-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <strong>{ipo.financierId?.username} → {ipo.applicantId?.username}</strong>
+                      <span className="fs-5 fw-bold text-primary">₹{ipo.amountFunded}</span>
+                    </div>
+                    <div className="text-muted small">Application: {ipo.ipoApplicationId?.companyName}</div>
+                    <div className="d-flex gap-2 flex-wrap mt-2">
+                      <span className="badge bg-info text-dark border">{ipo.overallStatus}</span>
+                      {ipo.refundStatus === 'pending' && <span className="badge bg-warning text-dark">Refund Pending (₹{ipo.refundAmount})</span>}
+                      {ipo.settlementStatus === 'pending' && <span className="badge bg-danger">Settlement Pending (₹{ipo.saleProceeds})</span>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          )}
         </div>
         <link 
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" 
