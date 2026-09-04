@@ -37,6 +37,7 @@ function FundingRecordForm({ ipoApp, event, onRecordAdded }) {
     fetchRecords();
     const currentUserId = localStorage.getItem('userId')?.replace(/"/g, '');
     if (currentUserId) setFinancierId(currentUserId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ipoApp._id]);
 
   const handleAddApplicant = () => {

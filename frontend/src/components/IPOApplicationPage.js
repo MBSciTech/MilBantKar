@@ -26,6 +26,7 @@ function IPOApplicationPage({ event, fetchEventDetails }) {
 
   useEffect(() => {
     fetchApplications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event._id]);
 
   const handleCreateApp = async () => {
